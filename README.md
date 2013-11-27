@@ -48,9 +48,9 @@ the --vars\_to_map argument; e.g., "--vars\_to\_map="kT, Z, fkT"):
 
 *   kT / fkT: MEKAL or APEC temperature / error (keV)
 *   Z / fZ: MEKAL or APEC abundance / error (Solar)
-*   nH / fnH: WABS column density (10^22 cm^-2)
-*   norm: MEKAL or APEC normalization
+*   nH / fnH: WABS column density / error (10^22 cm^-2)
+*   norm / fnorm: MEKAL or APEC normalization / error
 *   chi2: chi-squared value of the fit
-*   plindx: power-law index; requires "--add\_comp=pow"
-*   mdot: MKCFLOW cooling rate (solar mass/yr); requires "--add\_comp=mkcflow"
+*   plindx / fplindx: power-law index / error; requires "--add\_comp=pow"
+*   mdot / fmdot: MKCFLOW cooling rate / error (solar mass/yr); requires "--add\_comp=mkcflow"
 
