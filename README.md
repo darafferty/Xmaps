@@ -24,7 +24,6 @@ component is one of the following:
 *   mekal/apec: add a 2nd single-temperature component (WABS*[MEKAL + MEKAL]).
     The abundances of the two single-temperature components are tied together.
 *   pow: add a power-law component (WABS*[MEKAL + POW])
-*   mkcflow: add a MKCFLOW component (WABS*[MEKAL + MKCFLOW])
 
 If a second component is specified, the fit is performed twice: once for the
 single-temperature model and again with the second component included. The chi2
@@ -44,7 +43,7 @@ Spectral parameters that can be mapped
 --------------------------------------
 
 The following parameters can be mapped (by passing them to make\_maps.py with
-the --vars\_to_map argument; e.g., "--vars\_to\_map="kT, Z, fkT"):
+the --vars\_to_map argument; e.g., --vars\_to\_map="kT, Z, fkT"):
 
 *   kT / fkT: MEKAL or APEC temperature / error (keV)
 *   Z / fZ: MEKAL or APEC abundance / error (Solar)
@@ -52,5 +51,4 @@ the --vars\_to_map argument; e.g., "--vars\_to\_map="kT, Z, fkT"):
 *   norm / fnorm: MEKAL or APEC normalization / error
 *   chi2: chi-squared value of the fit
 *   plindx / fplindx: power-law index / error; requires "--add\_comp=pow"
-*   mdot / fmdot: MKCFLOW cooling rate / error (solar mass/yr); requires "--add\_comp=mkcflow"
 
