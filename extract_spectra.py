@@ -87,7 +87,7 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
     else:
         clobbertext = ''
     cmd = ['asphist', asol_file, asphist_file, evt2_file, clobbertext]
-    print 'Making an aspect histogram ('+asphist_file+') for '+evt2_file+'...'
+    print('Making an aspect histogram ('+asphist_file+') for '+evt2_file+'...')
     p = subprocess.call(cmd)
 
     # Get number of cores if not specified and determine
@@ -126,7 +126,7 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
         thr.join()
 
     # Check whether all spectra and responses were extracted successfully
-    print '\nExtraction complete for '+evt2_file+':'
+    print('\nExtraction complete for '+evt2_file+':')
     made_all = True
     for i,region in enumerate(region_list):
         if root == None:
@@ -138,10 +138,10 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
                 pi_file = root + '_' + str(i) + '_sou.pi'
         if not os.path.isfile(pi_file):
             made_all = False
-            print '  No spectra or responses made for region '+region+'.'
+            print('  No spectra or responses made for region '+region+'.')
     if made_all == True:
-        print '  All spectra and responses made successfully.'
-    print ' '
+        print('  All spectra and responses made successfully.')
+    print(' ')
 
 
 def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bpix_file, root=None, bg_file=None, bg_region=None, binning=None, clobber=False, quiet=False, pfiles_number=None):
@@ -197,7 +197,7 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
     # Now loop over regions and do extraction
     for i,region in enumerate(region_list):
         if os.path.isfile(region):
-            print 'Extracting spectra/responses from region ' + region + '...'
+            print('Extracting spectra/responses from region ' + region + '...')
 
             # Define output file names (follow acisspec conventions)
             if root == None:
@@ -258,7 +258,7 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
                         p = subprocess.call(cmd, env=env)
 
         else:
-            print 'Region file ' + region + ' not found! No extraction done for this region.'
+            print('Region file ' + region + ' not found! No extraction done for this region.')
 
 
 def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=None, miny=None, bin=None, skip_dmimglasso=False, clobber=False):
@@ -292,21 +292,21 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
         # Get pixel scale parameters out of the binmap header as needed
         hdr_binmap = pyfits.getheader(binmap_file)
         if minx == None:
-            if hdr_binmap.has_key('CRVAL1P'):
+            if 'CRVAL1P' in hdr_binmap:
                 minx = hdr_binmap['CRVAL1P']
             else:
                 sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
         if miny == None:
-            if hdr_binmap.has_key('CRVAL2P'):
+            if 'CRVAL2P' in hdr_binmap:
                 miny = hdr_binmap['CRVAL2P']
             else:
                 sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
         if bin == None:
-            if hdr_binmap.has_key('CDELT1P'):
+            if 'CDELT1P' in hdr_binmap:
                 binx = int(hdr_binmap['CDELT1P'])
             else:
                 sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
-            if hdr_binmap.has_key('CDELT2P'):
+            if 'CDELT2P' in hdr_binmap:
                 biny = int(hdr_binmap['CDELT2P'])
             else:
                 biny = binx
@@ -329,7 +329,7 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
     inbin = numpy.where(binimage == minbin)
     if 0 in inbin[0] or numpy.size(binimage,0)-1 in inbin[0]:
         minbin += 1
-    print '  Using minbin='+str(minbin)+', maxbin='+str(maxbin)+', minx='+str(minx)+', miny='+str(miny)+', binx='+str(binx)+', biny='+str(biny)
+    print('  Using minbin='+str(minbin)+', maxbin='+str(maxbin)+', minx='+str(minx)+', miny='+str(miny)+', binx='+str(binx)+', biny='+str(biny))
 
     # For each bin, construct region using CIAO's "dmimglasso"
     if not skip_dmimglasso:
@@ -343,12 +343,13 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
             inbin = numpy.where(binimage == i)
             if len(inbin[0]) == 0:
                 continue
-            xpos = minx + binx * (inbin[1][0] + 1.5)
-            ypos = miny + biny * (inbin[0][0] + 1.5)
-
-            cmd = ['dmimglasso', binmap_file, out_region_fits_file, str(xpos), str(ypos), '0.1', '0.1', 'value=delta', 'maxdepth=1000000', 'clobber='+clb_txt]
-            p = subprocess.call(cmd)
-
+            for j in range(len(inbin[0])):
+                xpos = min(minx + binx * (inbin[1][j] + 1), minx + binx * binimage.shape[1])
+                ypos = min(miny + biny * (inbin[0][j] + 1), miny + biny * binimage.shape[0])
+                cmd = ['dmimglasso', binmap_file, out_region_fits_file, str(xpos), str(ypos), '0.1', '0.1', 'value=delta',     'maxdepth=1000000', 'clobber='+clb_txt]
+                p = subprocess.call(cmd)
+                if p == 0:
+                    break
 
             #
             # Check for failure condition
@@ -359,10 +360,10 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
                 cmd2 = ['dmmakereg', 'region('+output_dir+'/regions/xaf_'+str(i)+'.reg)', out_region_fits_file]
                 q = subprocess.call(cmd2)
 
-                print i, xpos, ypos, out_region_fits_file, p
-                print cmd
-                print cmd2
-                print q
+                print(i, xpos, ypos, out_region_fits_file, p)
+                print(cmd)
+                print(cmd2)
+                print(q)
 
 
             if reg_format == 'ascii':
@@ -400,7 +401,7 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
             if os.path.isfile(path) and pyfits.open(path)[1].data is not None:
                 bin_region_list.append(filename)
             else:
-                print "Warning: not using %s" % filename
+                print("Warning: not using %s" % filename)
     return bin_region_list
 
 
@@ -435,7 +436,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
 
     # Get pixel scale parameters out of the input header
     # if it is the header of an image
-    if hdr_in.has_key('CRVAL1P'):
+    if 'CRVAL1P' in hdr_in:
         CRVAL1P_in = hdr_in['CRVAL1P']
         CRPIX1P_in = hdr_in['CRPIX1P']
         CDELT1P_in = hdr_in['CDELT1P']
@@ -494,7 +495,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
                         yphys_in = reg.Y[0][i]
 
                     # Change physical coordinates to image coordinates if needed
-                    if hdr_in.has_key('CRVAL1P'):
+                    if 'CRVAL1P' in hdr_in:
                         xim_in = (xphys_in - CRVAL1P_in - CRPIX1P_in) / CDELT1P_in
                         yim_in = (yphys_in - CRVAL2P_in - CRPIX2P_in) / CDELT2P_in
                     else:
@@ -508,7 +509,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
                     xim_out, yim_out = ad2xy(a, d, hdr_out)
 
                     # Change output image coordinates to physical coordinates if needed
-                    if hdr_in.has_key('CRVAL1P'):
+                    if 'CRVAL1P' in hdr_in:
                         xphys_out=xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
                         yphys_out=yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
                     else:
@@ -539,7 +540,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
                 yphys_in = float(reg[posy0:posy1])
 
                 # Change physical coordinates to image coordinates if needed
-                if hdr_in.has_key('CRVAL1P'):
+                if 'CRVAL1P' in hdr_in:
                     xim_in = (xphys_in - CRVAL1P_in - CRPIX1P_in) / CDELT1P_in
                     yim_in = (yphys_in - CRVAL2P_in - CRPIX2P_in) / CDELT2P_in
                 else:
@@ -553,7 +554,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
                 xim_out, yim_out = ad2xy(a, d, hdr_out)
 
                 # Change output image coordinates to physical coordinates if needed
-                if hdr_in.has_key('CRVAL1P'):
+                if 'CRVAL1P' in hdr_in:
                     xphys_out=xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
                     yphys_out=yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
                 else:
@@ -593,7 +594,7 @@ def ad2xy(a, d, hdr):
     Returns: x, y image coordinates corresponding to a, d
 
     """
-    if hdr.has_key('CRVAL1P'): # -> header of an image
+    if 'CRVAL1P' in hdr: # -> header of an image
         CRVAL1 = hdr['CRVAL1P']
         CRPIX1 = hdr['CRPIX1P']
         CDELT1 = hdr['CDELT1P']
@@ -638,7 +639,7 @@ def xy2ad(x, y, hdr):
     Returns: ra, dec corresponding to x, y
 
     """
-    if hdr.has_key('CRVAL1P'): # -> header of an image
+    if 'CRVAL1P' in hdr: # -> header of an image
         CRVAL1 = hdr['CRVAL1P']
         CRPIX1 = hdr['CRPIX1P']
         CDELT1 = hdr['CDELT1P']

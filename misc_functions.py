@@ -18,11 +18,12 @@ def stack_to_list(infile, stack_of_stacks=False, adjust_path=False):
         stack_file = open(infile[1:], "r")
         stack_list = stack_file.readlines()
         stack_file.close()
-        for i in range(len(stack_list)):
-            stack_list[i] = stack_list[i].rstrip() # trim newlines
-#            if stack_of_stacks:
-#                stack_list[i] = stack_list[i].split(',')
-#                stack_list[i] = stack_list[i].strip() # trim spaces
+        for i, stack_entry in enumerate(stack_list):
+            stack_list[i] = stack_entry.rstrip() # trim newlines
+            if stack_of_stacks and ',' in stack_entry:
+                stack_list[i] = stack_entry.split(',')
+                for j, substack in enumerate(stack_list[i]):
+                    stack_list[i][j] = substack.strip() # trim spaces
         blank_lines=True
         while blank_lines==True:
             try:

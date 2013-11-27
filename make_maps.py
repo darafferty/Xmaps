@@ -18,8 +18,10 @@ Arguments:
 
 Options:
   -h, --help            show this help message and exit
-  --vars_to_map=VAL     Variable(s) to map (kT, Z, nH, fkT, fZ, fnH, chi2);
+  --vars_to_map=VAL     Variable(s) to map (kT, Z, nH, norm, plindx, mdot, fkT, fZ, fnH, fplindx, fmdot, chi2);
                         default = "kT, Z"
+  --add_comp=VAL        Add a component to the default single-temperature model
+                        (pow, mekal/apec, mkcflow); default = None'
   --bin=VAL             Binning for spectra (counts); default = 25
   --kT=VAL              Initial guess for kT (keV); default = 3
   --Ab=VAL              Initial guess for abundance (solar); default = 0.3
@@ -30,7 +32,6 @@ Options:
                         mekal
   --fix_nh=VAL          Freeze nH (yes/no); default = yes
   --fix_abund=VAL       Freeze abundance (yes/no); default = no
-  --find_err=VAL        Calculate errors (yes/no); default = no
   --binmap_bin=VAL      Binning for binmap (pixels); default = None
   --binmap_minx=VAL     Minimum sky x for binmap (sky coords); default = None
   --binmap_miny=VAL     Minimum sky y for binmap (sky coords); default = None
@@ -61,6 +62,8 @@ CIAO must be initialized before starting the script.
 
 Version 0.6: 3/5/2011 - Updated for Ciao 4.3
 Version 0.7: 1/11/2013 - Updated for Ciao 4.5
+Version 0.8: 26/11/2013 - Removed find_err option as redundant; updated to
+    work with Python 3
 
 """
 
@@ -161,9 +164,21 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
             nH2_err = numpy.sqrt(data2['nH_lo']**2 + data2['nH_hi']**2)
             upper_limits = numpy.where(nH2_err/data2['nH'] >= 1.0)
             nH2_err[upper_limits] = data2['nH'][upper_limits]
+        if 'norm' in data2.dtype.names:
+            norm2_err = numpy.sqrt(data2['norm_lo']**2 + data2['norm_hi']**2)
+            upper_limits = numpy.where(norm2_err/data2['norm'] >= 1.0)
+            norm2_err[upper_limits] = data2['norm'][upper_limits]
+        if 'norm1' in data2.dtype.names:
+            norm1_err = numpy.sqrt(data2['norm1_lo']**2 + data2['norm1_hi']**2)
+            upper_limits = numpy.where(norm1_err/data2['norm1'] >= 1.0)
+            norm1_err[upper_limits] = data2['norm1'][upper_limits]
+        if 'norm2' in data2.dtype.names:
+            norm2_err = numpy.sqrt(data2['norm2_lo']**2 + data2['norm2_hi']**2)
+            upper_limits = numpy.where(norm2_err/data2['norm2'] >= 1.0)
+            norm2_err[upper_limits] = data2['norm2'][upper_limits]
         if 'plindx' in data2.dtype.names:
             plindx_err = numpy.sqrt(data2['plindx_lo']**2 + data2['plindx_hi']**2)
-        if 'mkcnorm' in data2.dtype.names:
+        if 'mdot' in data2.dtype.names:
             mkcnorm_err = numpy.sqrt(data2['mkcnorm_lo']**2 + data2['mkcnorm_hi']**2)
             upper_limits = numpy.where(mkcnorm_err/data2['mkcnorm'] >= 1.0)
             mkcnorm_err[upper_limits] = data2['mkcnorm'][upper_limits]
@@ -198,9 +213,14 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
         else:
             binimage_Z = numpy.zeros(binimage.shape, dtype=float)
     if 'plindx' in vars_to_map: binimage_plindx = numpy.zeros(binimage.shape, dtype=float)
-    if 'mkcnorm' in vars_to_map: binimage_mkcnorm = numpy.zeros(binimage.shape, dtype=float)
+    if 'mdot' in vars_to_map: binimage_mkcnorm = numpy.zeros(binimage.shape, dtype=float)
     if 'nH' in vars_to_map: binimage_nH = numpy.zeros(binimage.shape, dtype=float)
-    if 'norm' in vars_to_map: binimage_norm = numpy.zeros(binimage.shape, dtype=float)
+    if 'norm' in vars_to_map:
+        if second_comp == 'mekal' or second_comp == 'apec':
+            binimage_norm1 = numpy.zeros(binimage.shape, dtype=float)
+            binimage_norm2 = numpy.zeros(binimage.shape, dtype=float)
+        else:
+            binimage_norm = numpy.zeros(binimage.shape, dtype=float)
     if 'fkT' in vars_to_map:
         if second_comp == 'mekal' or second_comp == 'apec':
             binimage_fkT1 = numpy.zeros(binimage.shape ,dtype=float)
@@ -214,8 +234,14 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
         else:
             binimage_fZ = numpy.zeros(binimage.shape, dtype=float)
     if 'fplindx' in vars_to_map: binimage_fplindx = numpy.zeros(binimage.shape, dtype=float)
-    if 'fmkcnorm' in vars_to_map: binimage_fplindx = numpy.zeros(binimage.shape, dtype=float)
+    if 'fmdot' in vars_to_map: binimage_fmkcnorm = numpy.zeros(binimage.shape, dtype=float)
     if 'fnH' in vars_to_map: binimage_fnH = numpy.zeros(binimage.shape, dtype=float)
+    if 'fnorm' in vars_to_map:
+        if second_comp == 'mekal' or second_comp == 'apec':
+            binimage_fnorm1 = numpy.zeros(binimage.shape, dtype=float)
+            binimage_fnorm2 = numpy.zeros(binimage.shape, dtype=float)
+        else:
+            binimage_fnorm = numpy.zeros(binimage.shape, dtype=float)
     if 'chi2' in vars_to_map: binimage_chi2 = numpy.zeros(binimage.shape, dtype=float)
     if Fprob != None: binimage_Fprob = numpy.zeros(binimage.shape, dtype=float)
 
@@ -264,7 +290,7 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
                 binimage_plindx[inbin] = 0.0
             else:
                 binimage_plindx[inbin] = data2['plindx'][i]
-        if 'mkcnorm' in vars_to_map:
+        if 'mdot' in vars_to_map:
             if best_fit[i] == 1:
                 binimage_mkcnorm[inbin] = 0.0
             else:
@@ -275,10 +301,21 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
             else:
                 binimage_nH[inbin] = data2['nH'][i]
         if 'norm' in vars_to_map:
-            if best_fit[i] == 1:
-                binimage_norm[inbin] = data1['norm'][i]
+            if second_comp == 'mekal' or second_comp == 'apec':
+                if data2['kT1'][i] <= data2['kT2'][i]:
+                    binimage_norm1[inbin] = data2['norm1'][i]
+                    binimage_norm2[inbin] = data2['norm2'][i]
+                else:
+                    binimage_norm1[inbin] = data2['norm2'][i]
+                    binimage_norm2[inbin] = data2['norm1'][i]
+                if best_fit[i] == 1: # single-temp model preferred
+                    binimage_norm1[inbin] = data1['norm'][i]
+                    binimage_norm2[inbin] = data1['norm'][i]
             else:
-                binimage_norm[inbin] = data2['norm'][i]
+                if best_fit[i] == 1:
+                    binimage_norm[inbin] = data1['norm'][i]
+                else:
+                    binimage_norm[inbin] = data2['norm'][i]
         if 'fkT' in vars_to_map:
             if second_comp == 'mekal' or second_comp == 'apec':
                 if data2['kT1'][i] <= data2['kT2'][i]:
@@ -316,7 +353,7 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
                 binimage_fplindx[inbin] = 0.0
             else:
                 binimage_fplindx[inbin] = plindx_err[i]
-        if 'fmkcnorm' in vars_to_map:
+        if 'fmdot' in vars_to_map:
             if best_fit[i] == 1:
                 binimage_fmkcnorm[inbin] = 0.0
             else:
@@ -326,6 +363,22 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
                 binimage_fnH[inbin] = nH_err[i]
             else:
                 binimage_fnH[inbin] = nH2_err[i]
+        if 'fnorm' in vars_to_map:
+            if second_comp == 'mekal' or second_comp == 'apec':
+                if data2['norm1'][i] <= data2['norm2'][i]:
+                    binimage_fnorm1[inbin] = norm1_err[i]
+                    binimage_fnorm2[inbin] = norm2_err[i]
+                else:
+                    binimage_fnorm1[inbin] = norm2_err[i]
+                    binimage_fnorm2[inbin] = norm1_err[i]
+                if best_fit[i] == 1: # single-temp model preferred
+                    binimage_fnorm1[inbin] = norm_err[i]
+                    binimage_fnorm2[inbin] = norm_err[i]
+            else:
+                if best_fit[i] == 1:
+                    binimage_fnorm[inbin] = norm_err[i]
+                else:
+                    binimage_fnorm[inbin] = norm2_err[i]
         if 'chi2' in vars_to_map:
             if best_fit[i] == 1:
                 binimage_chi2[inbin] = data1['chi2'][i]
@@ -357,15 +410,21 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
     if 'plindx' in vars_to_map:
         binmap[0].data = binimage_plindx
         binmap.writeto(root+'_plindx_map.fits', clobber=clobber)
-    if 'mkcnorm' in vars_to_map:
+    if 'mdot' in vars_to_map:
         binmap[0].data = binimage_mkcnorm
-        binmap.writeto(root+'_mkcnorm_map.fits', clobber=clobber)
+        binmap.writeto(root+'_mdot_map.fits', clobber=clobber)
     if 'nH' in vars_to_map:
         binmap[0].data = binimage_nH
         binmap.writeto(root+'_nH_map.fits', clobber=clobber)
     if 'norm' in vars_to_map:
-        binmap[0].data = binimage_norm
-        binmap.writeto(root+'_norm_map.fits', clobber=clobber)
+        if second_comp == 'mekal' or second_comp == 'apec':
+            binmap[0].data = binimage_norm1
+            binmap.writeto(root+'_norm1_map.fits', clobber=clobber)
+            binmap[0].data = binimage_norm2
+            binmap.writeto(root+'_norm2_map.fits', clobber=clobber)
+        else:
+            binmap[0].data = binimage_norm
+            binmap.writeto(root+'_norm_map.fits', clobber=clobber)
     if 'fkT' in vars_to_map:
         if second_comp == 'mekal' or second_comp == 'apec':
             binmap[0].data = binimage_fkT1
@@ -384,12 +443,21 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
         else:
             binmap[0].data = binimage_fZ
             binmap.writeto(root+'_fZ_map.fits', clobber=clobber)
+    if 'fnorm' in vars_to_map:
+        if second_comp == 'mekal' or second_comp == 'apec':
+            binmap[0].data = binimage_fnorm1
+            binmap.writeto(root+'_fnorm1_map.fits', clobber=clobber)
+            binmap[0].data = binimage_fnorm2
+            binmap.writeto(root+'_fnorm2_map.fits', clobber=clobber)
+        else:
+            binmap[0].data = binimage_fnorm
+            binmap.writeto(root+'_fnorm_map.fits', clobber=clobber)
     if 'fplindx' in vars_to_map:
         binmap[0].data = binimage_fplindx
         binmap.writeto(root+'_fplindx_map.fits', clobber=clobber)
-    if 'fmkcnorm' in vars_to_map:
+    if 'fmdot' in vars_to_map:
         binmap[0].data = binimage_fmkcnorm
-        binmap.writeto(root+'_fmkcnorm_map.fits', clobber=clobber)
+        binmap.writeto(root+'_fmdot_map.fits', clobber=clobber)
     if 'fnH' in vars_to_map:
         binmap[0].data = binimage_fnH
         binmap.writeto(root+'_fnH_map.fits', clobber=clobber)
@@ -519,8 +587,8 @@ def compare_fits(fit1_file, fit2_file, second_comp, null_prob=0.05):
 
 if __name__=='__main__':
     from optparse import OptionParser
-    parser = OptionParser(usage='%prog [options] <binmap> <evt2_file> <bg_file> <pbk_file> <asol_file> <msk_file> <redshift> <nH_Gal> <root>\n\nArguments:\n  <binmap>      map of bins, with values equal to bin number\n  <evt2_file>   events file or file of list of events files (e.g., @evt2.list)\n  <bg_file>     background file or file of list of background files (e.g., @bg.list)\n  <pbk_file>    pbk0 file or file of list of pbk0 files (e.g., @pbk0.list)\n  <asol_file>   asol1 file or file of list of asol1 files (e.g., @asol1.list).\n                If there are more than one asol1 files for an observation,\n                list them on one line, separated with a comma and ordered by time\n  <msk_file>    msk1 file or file of list of msk1 files (e.g., @msk1.list)\n  <bpix_file>    bad pixel file or file of list of bad pixel files (e.g., @bpix.list)\n  <redshift>    redshift of source\n  <nH_Gal>      Galactic N_H (10^22 cm^-2)\n  <root>        root of output map(s)', version="%prog 0.6")
-    parser.add_option('--vars_to_map', dest='vars_to_map', help='Variable(s) to map (kT, Z, nH, norm, fkT, fZ, fnH, chi2, plindx, mdot); default = "kT, Z"', metavar='VAL', default='kT, Z')
+    parser = OptionParser(usage='%prog [options] <binmap> <evt2_file> <bg_file> <pbk_file> <asol_file> <msk_file> <bpix_file> <redshift> <nH_Gal> <root>\n\nArguments:\n  <binmap>      map of bins, with values equal to bin number\n  <evt2_file>   events file or file of list of events files (e.g., @evt2.list)\n  <bg_file>     background file or file of list of background files (e.g., @bg.list)\n  <pbk_file>    pbk0 file or file of list of pbk0 files (e.g., @pbk0.list)\n  <asol_file>   asol1 file or file of list of asol1 files (e.g., @asol1.list).\n                If there are more than one asol1 files for an observation,\n                list them on one line, separated with a comma and ordered by time\n  <msk_file>    msk1 file or file of list of msk1 files (e.g., @msk1.list)\n  <bpix_file>    bad pixel file or file of list of bad pixel files (e.g., @bpix.list)\n  <redshift>    redshift of source\n  <nH_Gal>      Galactic N_H (10^22 cm^-2)\n  <root>        root of output map(s)', version="%prog 0.6")
+    parser.add_option('--vars_to_map', dest='vars_to_map', help='Variable(s) to map (kT, Z, nH, norm, plindx, mdot, fkT, fZ, fnH, fnorm, fplindx, fmdot, chi2); default = "kT, Z"', metavar='VAL', default='kT, Z')
     parser.add_option('--add_comp', dest='second_comp', help='Add a component to the default single-temperature model (pow, mekal/apec, mkcflow); default = None', metavar='VAL', default=None)
     parser.add_option('--bin', dest='binning', help='Binning for spectra (counts); default = 25', metavar='VAL', default='25')
     parser.add_option('--kT', dest='kT_guess', help='Initial guess for kT (keV); default = 3', metavar='VAL', default='3.0')
@@ -531,7 +599,6 @@ if __name__=='__main__':
     parser.add_option('--plasma_model', dest='plasma_model', help='plasma model to use in fit (mekal or apec); default = mekal', metavar='STR', default='mekal')
     parser.add_option('--fix_nh', dest='fix_nH', help='Freeze nH (yes/no); default = yes', metavar='VAL', default='yes')
     parser.add_option('--fix_abund', dest='fix_abund', help='Freeze abundance (yes/no); default = no', metavar='VAL', default='no')
-    parser.add_option('--find_err', dest='find_err', help='Calculate errors (yes/no); default = no', metavar='VAL', default='no')
     parser.add_option('--binmap_bin', dest='binmap_binning', help='Binning for binmap (pixels); default = None', metavar='VAL', default=None)
     parser.add_option('--min_rate', dest='min_cnt_rate_ratio', help='Minimum count rate ratio (relative to maximum count rate in region) below which observations are rejected; default = 0.3', metavar='VAL', default='0.3')
     parser.add_option('--binmap_minx', dest='binmap_minx', help='Minimum sky x for binmap (sky coords); default = None', metavar='VAL', default=None)
@@ -562,11 +629,9 @@ if __name__=='__main__':
         else:
             vars_to_map = v_to_map.split()
         second_comp = options.second_comp
-        allowed_vars_to_map = ['kT', 'Z', 'nH', 'norm', 'fkT', 'fZ', 'fnH', 'chi2', 'kT2', 'plindx', 'mdot']
+        allowed_vars_to_map = ['kT', 'Z', 'nH', 'norm', 'plindx', 'mdot', 'fkT', 'fZ', 'fnH', 'fnorm', 'fplindx', 'fmdot', 'chi2']
         for var in vars_to_map:
             if var in allowed_vars_to_map:
-                if var == 'kT2' and second_comp != 'mekal' and second_comp != 'apec':
-                    sys.exit('ERROR: Map variable "'+var+'" allowed only with --add_comp=mekal/apec.')
                 if var == 'plindx' and second_comp != 'pow':
                     sys.exit('ERROR: Map variable "'+var+'" allowed only with --add_comp=pow.')
                 if var == 'mdot' and second_comp != 'mkcflow':
@@ -590,11 +655,6 @@ if __name__=='__main__':
             fix_abund = True
         else:
             fix_abund = False
-        find_err = options.find_err
-        if find_err == 'yes':
-            find_errors = True
-        else:
-            find_errors = False
         binmap_bin = options.binmap_binning
         if binmap_bin != None:
             binmap_bin = int(binmap_bin)
@@ -647,10 +707,10 @@ if __name__=='__main__':
 
         # Make regions from the input binmap
         if not skip_extract:
-            print '\nDetermining regions from binmap...'
+            print('\nDetermining regions from binmap...')
             region_list_binmap = make_regions_from_binmap(binmap, root+'_spectra', minx=binmap_minx, miny=binmap_miny, bin=binmap_bin, skip_dmimglasso=False, clobber=clobber)
         if skip_extract and not skip_fit:
-            print '\nDetermining regions from binmap...'
+            print('\nDetermining regions from binmap...')
             region_list_binmap = make_regions_from_binmap(binmap, root+'_spectra', minx=binmap_minx, miny=binmap_miny, bin=binmap_bin, skip_dmimglasso=True, clobber=clobber)
 
         # Extract the spectra and responses
@@ -684,10 +744,16 @@ if __name__=='__main__':
                     spectra_list.append(spectra_list_append)
 
             os.chdir(root+'_spectra')
-            if 'fkT' in vars_to_map or 'fZ' in vars_to_map or 'fnH' in vars_to_map:
+            if 'fkT' in vars_to_map or 'fZ' in vars_to_map or 'fnH' in vars_to_map or 'fnorm' in vars_to_map or 'fplindx' in vars_to_map or 'fmdot' in vars_to_map:
                 find_errors = True
+            else:
+                find_errors = False
+
             if 'nH' in vars_to_map or 'fnH' in vars_to_map:
                 fix_nH_Gal = False
+            if 'Z' in vars_to_map or 'fZ' in vars_to_map:
+                fix_abund = False
+
             first_reg_num = int(os.path.splitext(region_list_binmap[0])[0][-1:])
             call_sherpa_1T(spectra_list, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energy=lo_energy, hi_energy=hi_energy, plasma_model=plasma_model, fix_nH_Gal=fix_nH_Gal, find_errors=find_errors, binning=binning_fit, fix_abund=fix_abund, reg_num_to_start=first_reg_num, clobber=clobber, make_plots=make_plots, min_cnt_rate_ratio=min_cnt_rate_ratio)
 
@@ -699,13 +765,13 @@ if __name__=='__main__':
             # temperature results.
             if second_comp != None:
                 if second_comp == 'pow':
-                    call_sherpa_1T_plus_pow(spectra_list, redshift, nH_Gal, kT_guess, Ab_guess, plindx_guess, root, lo_energy=lo_energy, hi_energy=hi_energy, plasma_model=plasma_model, fix_nH_Gal=fix_nH_Gal, find_errors=find_errors, binning=binning_fit, reg_num_to_start=first_reg_num, clobber=clobber, make_plots=make_plots)
+                    call_sherpa_1T_plus_pow(spectra_list, redshift, nH_Gal, kT_guess, Ab_guess, plindx_guess, root, lo_energy=lo_energy, hi_energy=hi_energy, plasma_model=plasma_model, fix_nH_Gal=fix_nH_Gal, find_errors=find_errors, binning=binning_fit, reg_num_to_start=first_reg_num, clobber=clobber, make_plots=make_plots, fix_abund=fix_abund)
                     fit2_file = root + '_wabs_' + plasma_model + '_pow.dat'
                 if second_comp == 'mekal' or second_comp == 'apec':
-                    call_sherpa_2T(spectra_list, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energy=lo_energy, hi_energy=hi_energy, plasma_model=plasma_model, fix_nH_Gal=fix_nH_Gal, find_errors=find_errors, binning=binning_fit, reg_num_to_start=first_reg_num, clobber=clobber, make_plots=make_plots)
+                    call_sherpa_2T(spectra_list, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energy=lo_energy, hi_energy=hi_energy, plasma_model=plasma_model, fix_nH_Gal=fix_nH_Gal, find_errors=find_errors, binning=binning_fit, reg_num_to_start=first_reg_num, clobber=clobber, make_plots=make_plots, fix_abund=fix_abund)
                     fit2_file = root + '_wabs_2' + plasma_model + '.dat'
                 if second_comp == 'mkcflow':
-                    call_sherpa_1T_plus_mkcflow(spectra_list, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energy=lo_energy, hi_energy=hi_energy, plasma_model=plasma_model, fix_nH_Gal=fix_nH_Gal, find_errors=find_errors, binning=binning_fit, reg_num_to_start=first_reg_num, clobber=clobber, make_plots=make_plots)
+                    call_sherpa_1T_plus_mkcflow(spectra_list, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energy=lo_energy, hi_energy=hi_energy, plasma_model=plasma_model, fix_nH_Gal=fix_nH_Gal, find_errors=find_errors, binning=binning_fit, reg_num_to_start=first_reg_num, clobber=clobber, make_plots=make_plots, fix_abund=fix_abund)
                     fit2_file = root + '_wabs_' + plasma_model + '_mkcflow.dat'
 
             os.chdir('..')
@@ -729,20 +795,20 @@ if __name__=='__main__':
             fit2_file = None
             best_fit = None
             Fprob = None
-        print '\nPainting the maps...'
+        print('\nPainting the maps...')
         paint_map(binmap, root+'_spectra/'+fit_file, vars_to_map, root=root, fit2_file=fit2_file, second_comp=second_comp, best_fit=best_fit, Fprob=Fprob, clobber=clobber)
-        print '...done. \n\nOutput maps are named:'
+        print('...done. \n\nOutput maps are named:')
         if second_comp == None:
             for var in vars_to_map:
-                print '  '+root+'_'+var+'_map.fits'
+                print('  '+root+'_'+var+'_map.fits')
         else:
             for var in vars_to_map:
                 if var == 'nH' or var == 'chi2' or var == 'plindx' or var == 'mdot':
-                    print '  '+root+'_'+var+'_map.fits'
+                    print('  '+root+'_'+var+'_map.fits')
                 else:
-                    print '  '+root+'_'+var+'1_map.fits'
-                    print '  '+root+'_'+var+'2_map.fits'
-            print '  '+root+'_Ftest_map.fits'
+                    print('  '+root+'_'+var+'1_map.fits')
+                    print('  '+root+'_'+var+'2_map.fits')
+            print('  '+root+'_Ftest_map.fits')
 
     else:
         parser.print_help()
