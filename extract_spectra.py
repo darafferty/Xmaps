@@ -223,7 +223,7 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
             else:
                 bgtext = 'bkgfile=NONE'
 
-            cmd = ['specextract', evt2_filter, 'outroot='+pi_root, 'pbkfile='+pbk_file, 'asp='+asphist_file, 'mskfile='+msk_file, 'badpixfile='+bpix_file, 'weight=yes', 'bkgresp=no', 'correct=no', 'combine=no', 'dafile=CALDB', bgtext, binningtext1, binningtext2, clobbertext, 'binarfwmap='+str(binarfwmap)]
+            cmd = ['specextract', evt2_filter, 'outroot='+pi_root, 'asp='+asphist_file, 'mskfile='+msk_file, 'badpixfile='+bpix_file, 'weight=yes', 'bkgresp=no', 'correct=no', 'combine=no', 'dafile=CALDB', bgtext, binningtext1, binningtext2, clobbertext, 'binarfwmap='+str(binarfwmap)]
 
             if quiet:
                 p = subprocess.call(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
