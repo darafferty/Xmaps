@@ -8,6 +8,7 @@ spectra as an argument with '@' prepended.
 
 Version 0.6: 3/5/2011 - Updated for Ciao 4.3
 Version 0.7: 1/11/2013 - Updated for Ciao 4.5
+Version 0.8: 29/5/2014 - Updated for Ciao 4.6
 
 """
 import os
@@ -94,14 +95,14 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                     if pi_root[-3:] == 'grp': # check if grouped or not
                         pi_root = pi_root[:-4]
                     bgd_file = pi_root[:-3] + 'bgd.pi'
-                    wrmf_file = pi_root + '.wrmf'
-                    warf_file = pi_root + '.warf'
+                    rmf_file = pi_root + '.rmf'
+                    arf_file = pi_root + '.arf'
                     pi_file_exists = os.path.isfile(pi_file)
                     bgd_file_exists = os.path.isfile(bgd_file)
-                    wrmf_file_exists = os.path.isfile(wrmf_file)
-                    warf_file_exists = os.path.isfile(warf_file)
+                    rmf_file_exists = os.path.isfile(rmf_file)
+                    arf_file_exists = os.path.isfile(arf_file)
 
-                    if pi_file_exists and bgd_file_exists and wrmf_file_exists and warf_file_exists: # make sure all required files exist before trying to load data
+                    if pi_file_exists and bgd_file_exists and rmf_file_exists and arf_file_exists: # make sure all required files exist before trying to load data
                         nobs_current_reg += 1
                         load_pha(src_id, pi_file)
                         if binning != None:
@@ -154,14 +155,14 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                 if pi_root[-3:] == 'grp': # check if grouped or not
                     pi_root = pi_root[:-4]
                 bgd_file = pi_root[:-3] + 'bgd.pi'
-                wrmf_file = pi_root + '.wrmf'
-                warf_file = pi_root + '.warf'
+                rmf_file = pi_root + '.rmf'
+                arf_file = pi_root + '.arf'
                 pi_file_exists = os.path.isfile(pi_file)
                 bgd_file_exists = os.path.isfile(bgd_file)
-                wrmf_file_exists = os.path.isfile(wrmf_file)
-                warf_file_exists = os.path.isfile(warf_file)
+                rmf_file_exists = os.path.isfile(rmf_file)
+                arf_file_exists = os.path.isfile(arf_file)
 
-                if pi_file_exists and bgd_file_exists and wrmf_file_exists and warf_file_exists: # make sure all required files exist before trying to load data
+                if pi_file_exists and bgd_file_exists and rmf_file_exists and arf_file_exists: # make sure all required files exist before trying to load data
                     nobs_current_reg += 1
                     valid_obs_nums.append(1)
                     load_pha(pi_file)
@@ -444,14 +445,14 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                     if pi_root[-3:] == 'grp': # check if grouped or not
                         pi_root = pi_root[:-4]
                     bgd_file = pi_root[:-3] + 'bgd.pi'
-                    wrmf_file = pi_root + '.wrmf'
-                    warf_file = pi_root + '.warf'
+                    rmf_file = pi_root + '.rmf'
+                    arf_file = pi_root + '.arf'
                     pi_file_exists = os.path.isfile(pi_file)
                     bgd_file_exists = os.path.isfile(bgd_file)
-                    wrmf_file_exists = os.path.isfile(wrmf_file)
-                    warf_file_exists = os.path.isfile(warf_file)
+                    rmf_file_exists = os.path.isfile(rmf_file)
+                    arf_file_exists = os.path.isfile(arf_file)
 
-                    if pi_file_exists and bgd_file_exists and wrmf_file_exists and warf_file_exists: # make sure all required files exist before trying to load data
+                    if pi_file_exists and bgd_file_exists and rmf_file_exists and arf_file_exists: # make sure all required files exist before trying to load data
                         nobs_current_reg += 1
                         load_pha(src_id, pi_file)
                         if binning != None:
@@ -504,14 +505,14 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                 if pi_root[-3:] == 'grp': # check if grouped or not
                     pi_root = pi_root[:-4]
                 bgd_file = pi_root[:-3] + 'bgd.pi'
-                wrmf_file = pi_root + '.wrmf'
-                warf_file = pi_root + '.warf'
+                rmf_file = pi_root + '.rmf'
+                arf_file = pi_root + '.arf'
                 pi_file_exists = os.path.isfile(pi_file)
                 bgd_file_exists = os.path.isfile(bgd_file)
-                wrmf_file_exists = os.path.isfile(wrmf_file)
-                warf_file_exists = os.path.isfile(warf_file)
+                rmf_file_exists = os.path.isfile(rmf_file)
+                arf_file_exists = os.path.isfile(arf_file)
 
-                if pi_file_exists and bgd_file_exists and wrmf_file_exists and warf_file_exists: # make sure all required files exist before trying to load data
+                if pi_file_exists and bgd_file_exists and rmf_file_exists and arf_file_exists: # make sure all required files exist before trying to load data
                     nobs_current_reg += 1
                     load_pha(pi_file)
                     if binning != None:
@@ -779,14 +780,14 @@ def call_sherpa_1T_plus_pow(spectra, redshift, nH_Gal, kT_guess, Ab_guess, plind
                     if pi_root[-3:] == 'grp': # check if grouped or not
                         pi_root = pi_root[:-4]
                     bgd_file = pi_root[:-3] + 'bgd.pi'
-                    wrmf_file = pi_root + '.wrmf'
-                    warf_file = pi_root + '.warf'
+                    rmf_file = pi_root + '.rmf'
+                    arf_file = pi_root + '.arf'
                     pi_file_exists = os.path.isfile(pi_file)
                     bgd_file_exists = os.path.isfile(bgd_file)
-                    wrmf_file_exists = os.path.isfile(wrmf_file)
-                    warf_file_exists = os.path.isfile(warf_file)
+                    rmf_file_exists = os.path.isfile(rmf_file)
+                    arf_file_exists = os.path.isfile(arf_file)
 
-                    if pi_file_exists and bgd_file_exists and wrmf_file_exists and warf_file_exists: # make sure all required files exist before trying to load data
+                    if pi_file_exists and bgd_file_exists and rmf_file_exists and arf_file_exists: # make sure all required files exist before trying to load data
                         nobs_current_reg += 1
                         load_pha(src_id, pi_file)
                         if binning != None:
@@ -839,14 +840,14 @@ def call_sherpa_1T_plus_pow(spectra, redshift, nH_Gal, kT_guess, Ab_guess, plind
                 if pi_root[-3:] == 'grp': # check if grouped or not
                     pi_root = pi_root[:-4]
                 bgd_file = pi_root[:-3] + 'bgd.pi'
-                wrmf_file = pi_root + '.wrmf'
-                warf_file = pi_root + '.warf'
+                rmf_file = pi_root + '.rmf'
+                arf_file = pi_root + '.arf'
                 pi_file_exists = os.path.isfile(pi_file)
                 bgd_file_exists = os.path.isfile(bgd_file)
-                wrmf_file_exists = os.path.isfile(wrmf_file)
-                warf_file_exists = os.path.isfile(warf_file)
+                rmf_file_exists = os.path.isfile(rmf_file)
+                arf_file_exists = os.path.isfile(arf_file)
 
-                if pi_file_exists and bgd_file_exists and wrmf_file_exists and warf_file_exists: # make sure all required files exist before trying to load data
+                if pi_file_exists and bgd_file_exists and rmf_file_exists and arf_file_exists: # make sure all required files exist before trying to load data
                     nobs_current_reg += 1
                     load_pha(pi_file)
                     if binning != None:
