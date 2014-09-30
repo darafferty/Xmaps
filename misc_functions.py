@@ -43,7 +43,8 @@ def stack_to_list(infile, stack_of_stacks=False, adjust_path=False):
     return stack_list
 
 
-def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca', quiet=False)
+def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
+    quiet=False):
     """
     Combines spectra for fitting using the CIAO tool combine_spectra
 
