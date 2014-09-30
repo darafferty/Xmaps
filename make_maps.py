@@ -684,6 +684,7 @@ if __name__=='__main__':
             binning_fit = int(binning)
         verbose = options.verbose
         make_plots = options.plot
+        add_spectra = options.add_spectra
         quiet = not verbose
         clobber = options.clobber
 
