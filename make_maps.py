@@ -751,7 +751,9 @@ if __name__=='__main__':
                     spectra_list.append(spectra_list_append)
 
             if add_spectra:
+                os.chdir(root+'_spectra')
                 spectra_list = combine_spectra(spectra_list, 'combined')
+                os.chdir('..')
 
             os.chdir(root+'_spectra')
             if 'fkT' in vars_to_map or 'fZ' in vars_to_map or 'fnH' in vars_to_map or 'fnorm' in vars_to_map or 'fplindx' in vars_to_map or 'fmdot' in vars_to_map:
