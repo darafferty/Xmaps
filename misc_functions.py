@@ -57,8 +57,8 @@ def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
     cmd = ['punlearn', 'combine_spectra']
     p = subprocess.call(cmd)
 
-    nreg = len(spectra[0]) # number of regions
-    nobs = len(spectra) # number of observations
+    nreg = len(spectra_list[0]) # number of regions
+    nobs = len(spectra_list) # number of observations
     combined_spectra_list = []
     for i in range(nreg):
         spectra_list_reg = []
