@@ -55,7 +55,7 @@ def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
     import subprocess
 
     cmd = ['punlearn', 'combine_spectra']
-    p = subprocess.call(cmd, env=env)
+    p = subprocess.call(cmd)
 
     spectra_list_txt = ','.join(spectra_list)
 
