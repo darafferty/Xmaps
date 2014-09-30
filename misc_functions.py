@@ -43,8 +43,7 @@ def stack_to_list(infile, stack_of_stacks=False, adjust_path=False):
     return stack_list
 
 
-def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
-    quiet=False):
+def combine_spectra(spectra_list, outroot, method='sum', quiet=False):
     """
     Combines spectra for fitting using the CIAO tool combine_spectra
 
@@ -67,8 +66,7 @@ def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
         spectra_list_txt = ','.join(spectra_list_reg)
         reg_outroot = 'reg{0}_{1}'.format(i, outroot)
 
-        cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method,
-            'bscale_method='+bscale_method]
+        cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method]
         if quiet:
             p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
