@@ -41,6 +41,8 @@ Options:
   -v                    Enable verbose mode
   -p                    Enable plotting
   -c                    Clobber any existing files
+  -a                    Add spectra together for fitting (instead of fitting the
+                        spectra simultaneously)
 
 A subdirectory in the current directory is made to store the
 (many) region files, spectra, responses, and fits. The sub-
@@ -78,6 +80,7 @@ from fit_spectra import *
 import numpy
 from sherpa.astro.ui import *
 from misc_functions import *
+
 
 def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, second_comp=None, best_fit=None, Fprob=None, clobber=False):
     """
@@ -608,6 +611,7 @@ if __name__=='__main__':
     parser.add_option('-b', action='store_true', dest='bin_in_extract', help='Do binning during extraction instead of during fitting', default=False)
     parser.add_option('-v', action='store_true', dest='verbose', help='Enable verbose mode', default=False)
     parser.add_option('-p', action='store_true', dest='plot', help='Enable plotting of spectral fits', default=False)
+    parser.add_option('-a', action='store_true', dest='add_spectra', help='Add spectra together for fitting (instead of fitting the spectra simultaneously)', default=False)
     parser.add_option('-c', action='store_true', dest='clobber', help='Clobber any existing files', default=False)
     (options, args) = parser.parse_args()
     if len(args) == 10:
@@ -671,6 +675,8 @@ if __name__=='__main__':
         skip_fit = options.skip_fit
         bin_in_extract = options.bin_in_extract
         if bin_in_extract:
+            if add_spectra:
+                sys.exit('Binning must be done during fitting if spectra are combined')
             binning_extract = int(binning)
             binning_fit = None
         else:
@@ -742,6 +748,9 @@ if __name__=='__main__':
                     spectra_list = [spectra_list_append]
                 else:
                     spectra_list.append(spectra_list_append)
+
+            if add_spectra:
+                spectra_list = combine_spectra(spectra_list, 'combined')
 
             os.chdir(root+'_spectra')
             if 'fkT' in vars_to_map or 'fZ' in vars_to_map or 'fnH' in vars_to_map or 'fnorm' in vars_to_map or 'fplindx' in vars_to_map or 'fmdot' in vars_to_map:

@@ -41,3 +41,31 @@ def stack_to_list(infile, stack_of_stacks=False, adjust_path=False):
             else:
                 if stack_list[i][0] != '/': stack_list[i] = '../' + stack_list[i]
     return stack_list
+
+
+def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca', quiet=False)
+    """
+    Combines spectra for fitting using the CIAO tool combine_spectra
+
+    The resulting combined spectrum is named {outroot}_src.pi
+
+    Returns a list with the name of the resulting combined spectrum.
+    """
+    import subprocess
+
+    cmd = ['punlearn', 'combine_spectra']
+    p = subprocess.call(cmd, env=env)
+
+    spectra_list_txt = ','.join(spectra_list)
+
+    cmd = ['combine_spectra', spectra_list_txt, outroot, 'method='+method,
+        'bscale_method='+bscale_method]
+
+    if quiet:
+        p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        p = subprocess.call(cmd)
+
+    return [outroot + '_src.pi']
+
+
