@@ -186,6 +186,7 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                 else:
                     print('\nFitting 1 spectrum in region '+str(i + reg_num_to_start)+' ('+str(int(totcnts))+' counts total)...')
                 abs1.nH = nH_Gal
+                abs1.cache = 0
                 if fix_nH_Gal:
                     freeze(abs1.nH)
                 else:
@@ -199,6 +200,7 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                     thaw(plsm1.abundanc)
                 plsm1.redshift = redshift
                 freeze(plsm1.redshift)
+                plsm1.cache = 0
 
                 fit()
                 fit_result = get_fit_results()
@@ -535,6 +537,7 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                 else:
                     print('\nFitting 1 spectrum in region '+str(i + reg_num_to_start)+' ('+str(numpy.sum(cnts))+' counts total)...')
                 abs1.nH = nH_Gal
+                abs1.cache = 0
                 if fix_nH_Gal:
                     freeze(abs1.nH)
                 else:
@@ -548,6 +551,7 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                     thaw(plsm1.abundanc)
                 plsm1.redshift = redshift
                 freeze(plsm1.redshift)
+                plsm1.cache = 0
                 plsm2.kt = kT_guess
                 thaw(plsm2.kt)
                 plsm2.abundanc = Ab_guess
@@ -558,6 +562,7 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                 link(plsm1.abundanc, plsm2.abundanc)
                 plsm2.redshift = redshift
                 freeze(plsm2.redshift)
+                plsm2.cache = 0
 
                 set_method("moncar")
                 fit()
