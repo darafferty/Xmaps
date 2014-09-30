@@ -67,6 +67,6 @@ def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
     else:
         p = subprocess.call(cmd)
 
-    return [outroot + '_src.pi']
+    return [[outroot + '_src.pi']]
 
 
