@@ -57,16 +57,24 @@ def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
     cmd = ['punlearn', 'combine_spectra']
     p = subprocess.call(cmd)
 
-    spectra_list_txt = ','.join(spectra_list)
+    nreg = len(spectra[0]) # number of regions
+    nobs = len(spectra) # number of observations
+    combined_spectra_list = []
+    for i in range(nreg):
+        spectra_list_reg = []
+        for j in range(nobs):
+            spectra_list_reg.append(spectra_list[j][i])
+        spectra_list_txt = ','.join(spectra_list_reg)
+        reg_outroot = 'reg{0}_{1}'.format(i, outroot)
 
-    cmd = ['combine_spectra', spectra_list_txt, outroot, 'method='+method,
-        'bscale_method='+bscale_method]
+        cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method,
+            'bscale_method='+bscale_method]
+        if quiet:
+            p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            p = subprocess.call(cmd)
 
-    if quiet:
-        p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    else:
-        p = subprocess.call(cmd)
-
-    return [[outroot + '_src.pi']]
+        combined_spectra_list.append(reg_outroot+'_src.pi')
+    return [combined_spectra_list]
 
 
