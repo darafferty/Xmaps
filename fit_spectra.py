@@ -179,7 +179,7 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                         set_source(xswabs.abs1 * xsapec.plsm1)
                     ignore(0.0, lo_energy)
                     ignore(hi_energy, None)
-                    cnts[0] = calc_data_sum(lo_energy, hi_energy) # get counts in filtered dataset
+                    cnts = calc_data_sum(lo_energy, hi_energy) # get counts in filtered dataset
                     subtract()
 
             # Check whether total counts >= min_counts.
