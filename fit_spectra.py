@@ -99,6 +99,9 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                     arf_file = pi_root + '.arf'
                     pi_file_exists = os.path.isfile(pi_file)
                     bgd_file_exists = os.path.isfile(bgd_file)
+                    if not bgd_file_exists:
+                        bgd_file = pi_root[:-3] + 'bkg.pi'
+                        bgd_file_exists = os.path.isfile(bgd_file)
                     rmf_file_exists = os.path.isfile(rmf_file)
                     arf_file_exists = os.path.isfile(arf_file)
 
@@ -159,6 +162,9 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                 arf_file = pi_root + '.arf'
                 pi_file_exists = os.path.isfile(pi_file)
                 bgd_file_exists = os.path.isfile(bgd_file)
+                if not bgd_file_exists:
+                    bgd_file = pi_root[:-3] + 'bkg.pi'
+                    bgd_file_exists = os.path.isfile(bgd_file)
                 rmf_file_exists = os.path.isfile(rmf_file)
                 arf_file_exists = os.path.isfile(arf_file)
 
