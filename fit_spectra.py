@@ -507,7 +507,7 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                             nobs_current_reg -= 1
 
             if nobs == 1:
-                pi_file = spectra[i]
+                pi_file = spectra[0][i]
                 pi_root = os.path.splitext(pi_file)[0]
                 if pi_root[-3:] == 'grp': # check if grouped or not
                     pi_root = pi_root[:-4]
@@ -516,6 +516,9 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                 arf_file = pi_root + '.arf'
                 pi_file_exists = os.path.isfile(pi_file)
                 bgd_file_exists = os.path.isfile(bgd_file)
+                if not bgd_file_exists:
+                    bgd_file = pi_root[:-3] + 'bkg.pi'
+                    bgd_file_exists = os.path.isfile(bgd_file)
                 rmf_file_exists = os.path.isfile(rmf_file)
                 arf_file_exists = os.path.isfile(arf_file)
 
@@ -523,14 +526,14 @@ def call_sherpa_2T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                     nobs_current_reg += 1
                     load_pha(pi_file)
                     if binning != None:
-                        group_counts(src_id, binning)
+                        group_counts(binning)
                     if plasma_model == 'mekal':
                         set_source(xswabs.abs1 * (xsmekal.plsm1 + xsmekal.plsm2))
                     if plasma_model == 'apec':
                         set_source(xswabs.abs1 * (xsapec.plsm1 + xsapec.plsm2))
                     ignore(0.0, lo_energy)
                     ignore(hi_energy, None)
-                    cnts[0] = calc_data_sum(lo_energy, hi_energy) # get counts in filtered dataset
+                    cnts = calc_data_sum(lo_energy, hi_energy) # get counts in filtered dataset
                     subtract()
 
             # Check whether total counts >= min_counts.
@@ -845,7 +848,7 @@ def call_sherpa_1T_plus_pow(spectra, redshift, nH_Gal, kT_guess, Ab_guess, plind
                             nobs_current_reg -= 1
 
             if nobs == 1:
-                pi_file = spectra[i]
+                pi_file = spectra[0][i]
                 pi_root = os.path.splitext(pi_file)[0]
                 if pi_root[-3:] == 'grp': # check if grouped or not
                     pi_root = pi_root[:-4]
@@ -854,6 +857,9 @@ def call_sherpa_1T_plus_pow(spectra, redshift, nH_Gal, kT_guess, Ab_guess, plind
                 arf_file = pi_root + '.arf'
                 pi_file_exists = os.path.isfile(pi_file)
                 bgd_file_exists = os.path.isfile(bgd_file)
+                if not bgd_file_exists:
+                    bgd_file = pi_root[:-3] + 'bkg.pi'
+                    bgd_file_exists = os.path.isfile(bgd_file)
                 rmf_file_exists = os.path.isfile(rmf_file)
                 arf_file_exists = os.path.isfile(arf_file)
 
@@ -861,14 +867,14 @@ def call_sherpa_1T_plus_pow(spectra, redshift, nH_Gal, kT_guess, Ab_guess, plind
                     nobs_current_reg += 1
                     load_pha(pi_file)
                     if binning != None:
-                        group_counts(src_id, binning)
+                        group_counts(binning)
                     if plasma_model == 'mekal':
                         set_source(xswabs.abs1 * (xsmekal.plsm1 + xspowerlaw.pow1))
                     if plasma_model == 'apec':
                         set_source(xswabs.abs1 * (xsapec.plsm1 + xspowerlaw.pow1))
                     ignore(0.0, lo_energy)
                     ignore(hi_energy, None)
-                    cnts[0] = calc_data_sum(lo_energy, hi_energy) # get counts in filtered dataset
+                    cnts = calc_data_sum(lo_energy, hi_energy) # get counts in filtered dataset
                     subtract()
 
             # Check whether total counts >= min_counts.
