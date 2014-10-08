@@ -752,7 +752,7 @@ if __name__=='__main__':
 
             if add_spectra:
                 os.chdir(root+'_spectra')
-                spectra_list = combine_spectra(spectra_list, 'combined')
+                spectra_list = combine_spectra(spectra_list, 'combined', clobber=clobber)
                 os.chdir('..')
 
             os.chdir(root+'_spectra')

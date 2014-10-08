@@ -43,7 +43,7 @@ def stack_to_list(infile, stack_of_stacks=False, adjust_path=False):
     return stack_list
 
 
-def combine_spectra(spectra_list, outroot, method='sum', quiet=False):
+def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=False):
     """
     Combines spectra for fitting using the CIAO tool combine_spectra
 
@@ -56,6 +56,11 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False):
     cmd = ['punlearn', 'combine_spectra']
     p = subprocess.call(cmd)
 
+    if clobber:
+        clb_txt = 'yes'
+    else:
+        clb_txt = 'no'
+
     nreg = len(spectra_list[0]) # number of regions
     nobs = len(spectra_list) # number of observations
     combined_spectra_list = []
@@ -66,7 +71,8 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False):
         spectra_list_txt = ','.join(spectra_list_reg)
         reg_outroot = 'reg{0}_{1}'.format(i, outroot)
 
-        cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method]
+        cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method,
+            'clobber='+clb_txt]
         if quiet:
             p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
