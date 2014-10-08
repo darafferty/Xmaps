@@ -79,6 +79,6 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=Fa
 #             p = subprocess.call(cmd)
 
         combined_spectra_list.append(reg_outroot+'_src.pi')
-    return combined_spectra_list
+    return [combined_spectra_list]
 
 
