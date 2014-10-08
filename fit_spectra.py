@@ -170,7 +170,6 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
 
                 if pi_file_exists and bgd_file_exists and rmf_file_exists and arf_file_exists: # make sure all required files exist before trying to load data
                     nobs_current_reg += 1
-                    valid_obs_nums.append(1)
                     load_pha(pi_file)
                     if binning != None:
                         group_counts(src_id, binning)
