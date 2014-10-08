@@ -153,6 +153,7 @@ def call_sherpa_1T(spectra, redshift, nH_Gal, kT_guess, Ab_guess, root, lo_energ
                             nobs_current_reg -= 1
 
             if nobs == 1:
+                src_id = 0 # index of source id
                 pi_file = spectra[0][i]
                 pi_root = os.path.splitext(pi_file)[0]
                 if pi_root[-3:] == 'grp': # check if grouped or not
