@@ -73,7 +73,7 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=Fa
                 spectra_list_reg.append(spectra_list[j][i])
         if len(spectra_list_reg) > 1:
             # If there are more than one spectra for this region, combine them
-            print('Combining {0} spectra for region {0}...'.format(len(spectra_list_reg), regnum))
+            print('Combining {0} spectra for region {1}...'.format(len(spectra_list_reg), regnum))
             spectra_list_txt = ','.join(spectra_list_reg)
             reg_outroot = 'reg{0}_{1}'.format(regnum, outroot)
 
