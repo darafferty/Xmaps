@@ -71,9 +71,9 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=Fa
         for j in range(nobs):
             if os.path.isfile(spectra_list[j][i]):
                 spectra_list_reg.append(spectra_list[j][i])
-        print('Found {0} spectra for region {0}'.format(len(spectra_list_reg), regnum))
         if len(spectra_list_reg) > 1:
             # If there are more than one spectra for this region, combine them
+            print('Combining {0} spectra for region {0}...'.format(len(spectra_list_reg), regnum))
             spectra_list_txt = ','.join(spectra_list_reg)
             reg_outroot = 'reg{0}_{1}'.format(regnum, outroot)
 
@@ -86,10 +86,12 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=Fa
             combined_spectra_list.append(reg_outroot+'_src.pi')
         elif len(spectra_list_reg) == 1:
             # If there is just one spectrum, return it.
+            print('Found one valid spectrum for region {0}. No combining necessary.'.format(regnum))
             combined_spectra_list.append(spectra_list_reg[0])
         else:
             # If there are none (which should never happen), return the first
             # anyway and it will be filtered later by fit_spectra
+            print('No valid spectrum for region {0}. Skipping.'.format(regnum))
             combined_spectra_list.append(spectra_list[0][i])
 
     return [combined_spectra_list]

@@ -751,7 +751,7 @@ if __name__=='__main__':
                     spectra_list.append(spectra_list_append)
 
             if add_spectra:
-                print('\Combining spectra in each region...')
+                print('\nCombining spectra in each region...')
                 os.chdir(root+'_spectra')
                 spectra_list = combine_spectra(spectra_list, 'combined', clobber=clobber)
                 os.chdir('..')
