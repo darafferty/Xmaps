@@ -67,18 +67,20 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=Fa
     for i in range(nreg):
         spectra_list_reg = []
         for j in range(nobs):
-            spectra_list_reg.append(spectra_list[j][i])
-        spectra_list_txt = ','.join(spectra_list_reg)
-        reg_outroot = 'reg{0}_{1}'.format(i, outroot)
+            if os.path.isfile(spectra_list[j][i]):
+                spectra_list_reg.append(spectra_list[j][i])
+        if len(spectra_list_reg) > 0:
+            spectra_list_txt = ','.join(spectra_list_reg)
+            reg_outroot = 'reg{0}_{1}'.format(i, outroot)
 
-        cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method,
-            'clobber='+clb_txt]
-        if quiet:
-            p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:
-            p = subprocess.call(cmd)
+            cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method,
+                'clobber='+clb_txt]
+            if quiet:
+                p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                p = subprocess.call(cmd)
+            combined_spectra_list.append(reg_outroot+'_src.pi')
 
-        combined_spectra_list.append(reg_outroot+'_src.pi')
     return [combined_spectra_list]
 
 
