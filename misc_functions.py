@@ -84,7 +84,7 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=Fa
             else:
                 p = subprocess.call(cmd)
             combined_spectra_list.append(reg_outroot+'_src.pi')
-        elif len(spectra_list_reg) == 1::
+        elif len(spectra_list_reg) == 1:
             # If there is just one spectrum, return it.
             combined_spectra_list.append(spectra_list_reg[0])
         else:
