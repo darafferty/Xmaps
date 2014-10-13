@@ -52,6 +52,7 @@ def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=Fa
     Returns a list with the name of the resulting combined spectrum.
     """
     import subprocess
+    import os
 
     cmd = ['punlearn', 'combine_spectra']
     p = subprocess.call(cmd)
