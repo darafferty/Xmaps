@@ -285,7 +285,7 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
     Uses "dmimglasso" from CIAO to build the polygonal regions.
 
     """
-    import pyfits
+    import astropy.io.fits as pyfits
 
     # Check if we need to find minx, miny, and binning of the binmap
     if minx == None or miny == None or bin == None:
@@ -465,7 +465,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
             nreg = len(region)
             for i in range(nreg): region[i] = region[i].rstrip() # trim newlines
         else:
-            import pyfits
+            import astropy.io.fits as pyfits
             reg_orig = pyfits.open(region_file)
             region = [reg_orig[1].data] # region parameters are stored in second exten
 

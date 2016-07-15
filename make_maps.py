@@ -71,7 +71,7 @@ Version 0.8: 26/11/2013 - Removed find_err option as redundant; updated to
 
 import os
 import sys
-import pyfits
+import astropy.io.fits as pyfits
 # Check that CIAO was initialized
 if os.environ.get("CALDB") == None:
     sys.exit('Please initalize CIAO before running this script.')
@@ -105,7 +105,7 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None, fit2_file=None, sec
     """
     # Check if min bin is negative or starts or ends on the image boundary.
     # If so, assume it is not wanted (e.g., for wvt bin maps).
-    import pyfits
+    import astropy.io.fits as pyfits
     binmap = pyfits.open(binmap_file, mode="readonly")
     binimage = binmap[0].data
     minbin = int(binimage.min())
@@ -515,7 +515,7 @@ def apply_binning_to_image(binmap_file, image_file, root=None, clobber=False):
 
     # Check if min bin is negative or starts or ends on the image boundary.
     # If so, assume it is not wanted (e.g., for wvt bin maps).
-    import pyfits
+    import astropy.io.fits as pyfits
     binmap = pyfits.open(binmap_file)
     binimage = binmap[0].data
     minbin = int(binimage.min())
