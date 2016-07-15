@@ -43,8 +43,7 @@ def stack_to_list(infile, stack_of_stacks=False, adjust_path=False):
     return stack_list
 
 
-def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
-    quiet=False):
+def combine_spectra(spectra_list, outroot, method='sum', quiet=False, clobber=False):
     """
     Combines spectra for fitting using the CIAO tool combine_spectra
 
@@ -53,20 +52,48 @@ def combine_spectra(spectra_list, outroot, method='sum', bscale_method='asca',
     Returns a list with the name of the resulting combined spectrum.
     """
     import subprocess
+    import os
 
     cmd = ['punlearn', 'combine_spectra']
-    p = subprocess.call(cmd, env=env)
+    p = subprocess.call(cmd)
 
-    spectra_list_txt = ','.join(spectra_list)
-
-    cmd = ['combine_spectra', spectra_list_txt, outroot, 'method='+method,
-        'bscale_method='+bscale_method]
-
-    if quiet:
-        p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if clobber:
+        clb_txt = 'yes'
     else:
-        p = subprocess.call(cmd)
+        clb_txt = 'no'
 
-    return [outroot + '_src.pi']
+    nreg = len(spectra_list[0]) # number of regions
+    nobs = len(spectra_list) # number of observations
+    combined_spectra_list = []
+    for i in range(nreg):
+        spectra_list_reg = []
+        regnum = int(spectra_list[0][i].split('reg')[1].split('_')[0])
+        for j in range(nobs):
+            if os.path.isfile(spectra_list[j][i]):
+                spectra_list_reg.append(spectra_list[j][i])
+        if len(spectra_list_reg) > 1:
+            # If there are more than one spectra for this region, combine them
+            print('  Combining {0} spectra for region {1}...'.format(len(spectra_list_reg), regnum))
+            spectra_list_txt = ','.join(spectra_list_reg)
+            reg_outroot = 'reg{0}_{1}'.format(regnum, outroot)
+
+            cmd = ['combine_spectra', spectra_list_txt, reg_outroot, 'method='+method,
+                'clobber='+clb_txt]
+            if quiet:
+                p = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                p = subprocess.call(cmd)
+            combined_spectra_list.append(reg_outroot+'_src.pi')
+        elif len(spectra_list_reg) == 1:
+            # If there is just one spectrum, return it.
+            print('  Found one valid spectrum for region {0}. No combining necessary.'.format(regnum))
+            combined_spectra_list.append(spectra_list_reg[0])
+        else:
+            # If there are none (which should never happen), return the first
+            # anyway and it will be filtered later by fit_spectra
+            print('  No valid spectrum for region {0}. Skipping.'.format(regnum))
+            combined_spectra_list.append(spectra_list[0][i])
+
+    return [combined_spectra_list]
 
 

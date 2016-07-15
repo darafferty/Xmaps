@@ -684,6 +684,7 @@ if __name__=='__main__':
             binning_fit = int(binning)
         verbose = options.verbose
         make_plots = options.plot
+        add_spectra = options.add_spectra
         quiet = not verbose
         clobber = options.clobber
 
@@ -750,7 +751,10 @@ if __name__=='__main__':
                     spectra_list.append(spectra_list_append)
 
             if add_spectra:
-                spectra_list = combine_spectra(spectra_list, 'combined')
+                print('\nCombining spectra in each region...')
+                os.chdir(root+'_spectra')
+                spectra_list = combine_spectra(spectra_list, 'combined', clobber=clobber)
+                os.chdir('..')
 
             os.chdir(root+'_spectra')
             if 'fkT' in vars_to_map or 'fZ' in vars_to_map or 'fnH' in vars_to_map or 'fnorm' in vars_to_map or 'fplindx' in vars_to_map or 'fmdot' in vars_to_map:
