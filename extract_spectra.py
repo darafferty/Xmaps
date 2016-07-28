@@ -27,6 +27,8 @@ import threading
 import sys
 from misc_functions import stack_to_list
 
+import pycrates
+import pytransform
 import stk
 
 if os.environ.get("CALDB") == None:
@@ -264,7 +266,107 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
             print('Region file ' + region + ' not found! No extraction done for this region.')
 
 
-def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=None, miny=None, bin=None, skip_dmimglasso=False, clobber=False):
+def find_sky_transform(cr):
+    """Return the SKY transform for the input image crate.
+
+    Parameters
+    ----------
+    cr
+        A IMAGECrate, e.g. as returned by pycrates.read_file().
+        It could also support tables, but that is trickier to do,
+        so currently restricted to an image.
+
+    Returns
+    -------
+    tr : None or a LINEAR2DTransform
+        Returns None if no transform can be found, otherwise
+        it returns a 2D transform.
+
+    Notes
+    -----
+    The mapping from FITS logical coordinates - what DS9 calls
+    "Image" coordinates - to the Chandra SKY system - which DS9
+    calls "Physical" coordinates - can be stored as two 1D
+    transforms (since Chandra data has no rotation) or a 2D
+    transform. This routine tries to "hide" this difference
+    and just return a 2D transform, whatever is in the input file.
+
+    If the files all matched Chandra data products, then it would
+    be relatively easy, but without knowing the axis names it is
+    rather messy. An alternative would be to manually add keywords
+    to the image files to make them look more like Chandra images,
+    and avoid the complexity here. This would include keyword/values
+    like
+
+        MTYPE1 = 'SKY'
+        MFORM1 = 'X,Y'
+        MTYPE2 = 'EQPOS'
+        MFORM2 = 'RA,DEC'
+
+    as well as the CRVAL1/2P, CRPIX1/2P, and CDELT1/2P keywords
+    (for the SKY coordinate transform) and CRVAL1/2, CRPIX1/2, and
+    CDELT1/2 for the celestial coordinates.
+
+    I expect this routine to fail horribly once it is used on
+    actual data.
+
+    """
+
+    assert isinstance(cr, pycrates.IMAGECrate)
+
+    axes = cr.get_axisnames()
+    if axes == []:
+        # Assume that if there's no axis names then there's no
+        # transform data.
+        return None
+
+    # The simple case is if there's a "vector" column (e.g. SKY)
+    # with a 2D transform.
+    #
+    try:
+        tr = cr.get_transform(axes[0])
+    except KeyError:
+        # For now return None, but could try something like
+        # iterating through the other axis names, if there
+        # are any.
+        return None
+
+    if isinstance(tr, pytransform.LINEAR2DTransform):
+        return tr
+
+    elif not isinstance(tr, pytransform.LINEARTransform):
+        # For now return None, but could try something like
+        # iterating through the other axis names, if there
+        # are any.
+        return None
+
+    # Assume that the second component is the second
+    # axis.
+    xtr = tr
+    try:
+        ytr = cr.get_transform(axes[1])
+    except KeyError:
+        return None
+
+    # Create a 2D transform based on the two 1D transforms.
+    #
+    trs = [xtr, ytr]
+    scales = [itr.get_parameter('SCALE').get_value()
+              for itr in trs]
+    offsets = [itr.get_parameter('OFFSET').get_value()
+               for itr in trs]
+    out = pytransform.LINEAR2DTransform()
+    out.get_parameter('ROTATION').set_value(0)
+    out.get_parameter('SCALE').set_value(scales)
+    out.get_parameter('OFFSET').set_value(offsets)
+    return out
+
+
+def make_regions_from_binmap(binmap_file, output_dir,
+                             reg_format='fits',
+                             minx=None, miny=None, bin=None,
+                             skip_dmimglasso=False,
+                             clobber=False):
     """
     Make CIAO region files from an input binmap.
 
@@ -288,68 +390,133 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
     Uses "dmimglasso" from CIAO to build the polygonal regions.
 
     """
-    import astropy.io.fits as pyfits
 
-    # Check if we need to find minx, miny, and binning of the binmap
-    if minx == None or miny == None or bin == None:
-        # Get pixel scale parameters out of the binmap header as needed
-        hdr_binmap = pyfits.getheader(binmap_file)
-        if minx == None:
-            if 'CRVAL1P' in hdr_binmap:
-                minx = hdr_binmap['CRVAL1P']
-            else:
-                sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
-        if miny == None:
-            if 'CRVAL2P' in hdr_binmap:
-                miny = hdr_binmap['CRVAL2P']
-            else:
-                sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
-        if bin == None:
-            if 'CDELT1P' in hdr_binmap:
-                binx = int(hdr_binmap['CDELT1P'])
-            else:
-                sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
-            if 'CDELT2P' in hdr_binmap:
-                biny = int(hdr_binmap['CDELT2P'])
-            else:
-                biny = binx
-    if bin != None:
-        binx = bin
-        biny = bin
+    cr = pycrates.read_file(binmap_file)
+    file_sky_transform = find_sky_transform(cr)
+
+    # Create the mapping from logical (image or pixel) coordinates
+    # to the SKY system. If none of minx, miny, or bin are given
+    # then the transform from the file is used, otherwise a new
+    # transform is created using the user-supplied information.
+    #
+    # This is not quite the same as the original version. In part,
+    # the original code was a little-more general, in that it
+    # could read in "partial" data on the SKY coordinate
+    # transformation - e.g. if the file only had CDELT1P and CDELT2P
+    # keywords then the original version would pick this up. Using
+    # the crates approach is more of an all-or-nothing: you either
+    # have all the keywords or none of them.
+    #
+    if minx is None and miny is None and bin is None:
+        sky_transform = file_sky_transform
+
+    else:
+        if file_sky_transform is None:
+            sys.exit('ERROR: The binmap header does not have ' +
+                     'pixel coordinate information. Please specify ' +
+                     'the minx, miny, and binning for the binmap.')
+
+        scales = file_sky_transform.get_parameter('SCALE').get_value()
+        offsets = file_sky_transform.get_parameter('OFFSET').get_value()
+
+        # There is a slight difference here in how the OFFSET values
+        # are processed (these correspond to the CRVAL1/2P values).
+        # The transform offsets are defined for the logical coordinate
+        # (0, 0), whereas the file values are defined for whatever
+        # the CRPIX1/2P values are. Normally these are (0.5,0.5),
+        # and I believe the original code rounded the CRVALXP values
+        # down, which effectively matches things up.
+        #
+        if minx is not None:
+            offsets[0] = minx * 1.0
+        if miny is not None:
+            offsets[1] = miny * 1.0
+
+        if bin is not None:
+            scales = [bin * 1.0, bin * 1.0]
+
+        sky_transform = pytransform.LINEAR2DTransform()
+        sky_transform.get_parameter('ROTATION').set_value(0)
+        sky_transform.get_parameter('SCALE').set_value(scales)
+        sky_transform.get_parameter('OFFSET').set_value(offsets)
+
+    # This logic could be moved into the if statement above to
+    # avoid unneeded work, but it's clearer here.
+    scales = sky_transform.get_parameter('SCALE').get_value()
+    offsets = sky_transform.get_parameter('SCALE').get_value()
+    binx, biny = scales
+    minx, miny = offsets
+    file_sky_transform = None
+
     if not os.path.exists(output_dir):
         p = subprocess.call(['mkdir', output_dir])
-    if clobber:
-        p = subprocess.call(['rm', '-f', output_dir+'/bin_*.reg'])
 
-    # Check if min bin is negative or starts or ends on the image boundary.
-    # If so, assume it is not wanted (e.g., for wvt bin maps).
-    binmap = pyfits.open(binmap_file, mode="readonly")
-    binimage = binmap[0].data
+    if clobber:
+        p = subprocess.call(['rm', '-f', output_dir + '/bin_*.reg'])
+
+    # Check if min bin is negative or starts or ends on the image
+    # boundary. If so, assume it is not wanted (e.g., for wvt bin
+    # maps).
+    binimage = cr.get_image().values
     minbin = int(binimage.min())
     maxbin = int(binimage.max())
     if minbin < 0:
         minbin = 0
+
     inbin = numpy.where(binimage == minbin)
-    if 0 in inbin[0] or numpy.size(binimage,0)-1 in inbin[0]:
+    if 0 in inbin[0] or numpy.size(binimage, 0) - 1 in inbin[0]:
         minbin += 1
-    print('  Using minbin='+str(minbin)+', maxbin='+str(maxbin)+', minx='+str(minx)+', miny='+str(miny)+', binx='+str(binx)+', biny='+str(biny))
+
+    print('  Using minbin=' + str(minbin) +
+          ', maxbin=' + str(maxbin) +
+          ', minx=' + str(minx) +
+          ', miny=' + str(miny) +
+          ', binx=' + str(binx) +
+          ', biny=' + str(biny))
 
     # For each bin, construct region using CIAO's "dmimglasso"
+    #
+    # The coordinates returned by numpy.where are 0 based, but
+    # the FITS logical/image coordinate system is 1 based, so
+    # a conversion is needed when passing to sky_transform.
+    #
     if not skip_dmimglasso:
         region_comment = '# Region file format: CIAO version 1.0\n'
         if clobber:
             clb_txt = 'yes'
         else:
             clb_txt = 'no'
-        for i in range(minbin, maxbin+1):
-            out_region_fits_file = output_dir+'/reg'+str(i)+'.fits'
-            inbin = numpy.where(binimage == i)
-            if len(inbin[0]) == 0:
+
+        for i in range(minbin, maxbin + 1):
+            out_region_fits_file = output_dir + '/reg' + \
+                str(i) + '.fits'
+            inybin, inxbin = numpy.where(binimage == i)
+            if len(inybin) == 0:
                 continue
-            for j in range(len(inbin[0])):
-                xpos = min(minx + binx * (inbin[1][j] + 1), minx + binx * binimage.shape[1])
-                ypos = min(miny + biny * (inbin[0][j] + 1), miny + biny * binimage.shape[0])
-                cmd = ['dmimglasso', binmap_file, out_region_fits_file, str(xpos), str(ypos), '0.1', '0.1', 'value=delta',     'maxdepth=1000000', 'clobber='+clb_txt]
+
+            # Convert the j,i values from where into the FITS
+            # logical coordinate system lx,ly and then convert
+            # to SKY values. It is important that lcoords is
+            # a floating-point value, and not an integer one,
+            # to ensure that no truncation of the result happens.
+            #
+            # An alternative would be to set coord=logical
+            # when running dmimglasso, so that
+            # inxbin+1, inybin+1 could be used (i.e. no need
+            # for the coordinate conversion.
+            #
+            lcoords = numpy.vstack((inxbin + 1.0, inybin + 1.0)).T
+            scoords = sky_transform.apply(lcoords)
+
+            for xpos, ypos in scoords:
+                # Is this restriction needed?
+                xpos = min(xpos, minx + binx * binimage.shape[1])
+                ypos = min(ypos, miny + biny * binimage.shape[0])
+                cmd = ['dmimglasso', binmap_file,
+                       out_region_fits_file,
+                       str(xpos), str(ypos), '0.1', '0.1',
+                       'value=delta', 'maxdepth=1000000',
+                       'clobber=' + clb_txt]
                 p = subprocess.call(cmd)
                 if p == 0:
                     break
@@ -368,15 +535,15 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
                 print(cmd2)
                 print(q)
 
-
             if reg_format == 'ascii':
                 if os.path.isfile(out_region_fits_file):
-                    reg = pyfits.open(out_region_fits_file)
-                    reg_params=reg[1].data.tolist()
-                    xvertices = reg_params[0][0] # array of x coordinates of vertices
-                    yvertices = reg_params[0][1] # array of y coordinates of vertices
+                    reg = pycrates.read_file(out_region_fits_file)
+                    vertices = reg.get_column(0).values
+                    xvertices = vertices[0, 0]
+                    yvertices = vertices[0, 1]
 
-                    out_region_file = open(output_dir+'/reg'+str(i)+'.reg', "w")
+                    out_region_file = open(output_dir + '/reg' +
+                                           str(i) + '.reg', "w")
                     out_region_file.write(region_comment)
 
                     for j in range(len(xvertices)):
@@ -392,7 +559,7 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
 
     # Build region list
     bin_region_list = []
-    for i in range(minbin, maxbin+1):
+    for i in range(minbin, maxbin + 1):
         if reg_format == 'ascii':
             # Check that each region file exists before adding it to the list
             if os.path.isfile(output_dir+'/reg'+str(i)+'.reg'):
@@ -401,7 +568,13 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
             # Check that each region file exists before adding it to the list
             filename = "reg%d.fits" % i
             path = os.path.join(output_dir, filename)
-            if os.path.isfile(path) and pyfits.open(path)[1].data is not None:
+            # It is not 100% clear what the equivalent to checking
+            # `pyfits.open(path)[1].data is not None`. I am going
+            # to use a check for a non-zero number of rows, forcing
+            # the second block (CXC Data model starts counting at
+            # a block number of 1, not 0).
+            if os.path.isfile(path) and \
+                    pycrates.read_file(path + "[2]").get_nrows() > 0:
                 bin_region_list.append(filename)
             else:
                 print("Warning: not using %s" % filename)
