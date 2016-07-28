@@ -26,6 +26,9 @@ import multiprocessing
 import threading
 import sys
 from misc_functions import stack_to_list
+
+import stk
+
 if os.environ.get("CALDB") == None:
     sys.exit('Please initalize CIAO before running.')
 
@@ -685,7 +688,10 @@ if __name__=='__main__':
     parser.add_option('-c', action='store_true', dest='clobber', help='clobber any existing files', default=False)
     (options, args) = parser.parse_args()
     if len(args) == 5:
-        region_file = args[0]
+        # stk.build reads in a stack - e.g. a single value, or a
+        # comma-separated list of names, or a filename with a leading
+        # '@' and returns a list of values.
+        region_list = stk.build(args[0])
         evt2_file = args[1]
         pbk_file = args[2]
         asol_file = args[3]
@@ -697,15 +703,8 @@ if __name__=='__main__':
         binning = options.bin_cnts
         ncores = options.ncores
 
-        # Read region file names from the region_file if region_file begins with '@'
-        if region_file[0] == '@':
-            region_list_file = open(region_file[1:], "r")
-            region_list = region_list_file.readlines()
-            region_list_file.close()
-            for i in range(len(region_list)): region_list[i] = region_list[i].rstrip() # trim newlines
-        else:
-            region_list = [region_file]
-
+        # TODO: stack_to_list could be simplified by using stk.build
+        #       but leave that for a later date.
         asol_list = stack_to_list(asol_file)
 
         # Do extraction using threads
