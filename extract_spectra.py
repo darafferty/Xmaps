@@ -31,10 +31,13 @@ import pycrates
 import pytransform
 import stk
 
-if os.environ.get("CALDB") == None:
+if os.environ.get("CALDB") is None:
     sys.exit('Please initalize CIAO before running.')
 
-def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, root=None, bg_file=None, bg_region=None, binning=None, ncores=None, quiet=True, clobber=False):
+
+def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file,
+             bpix_file, root=None, bg_file=None, bg_region=None,
+             binning=None, ncores=None, quiet=True, clobber=False):
     """
     Extracts spectra and makes appropriate weighted rmf and arf files.
 
@@ -56,13 +59,13 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
 
     """
     # Check that CIAO is initialized
-    if os.environ.get("CALDB") == None:
+    if os.environ.get("CALDB") is None:
         sys.exit('Please initalize CIAO before running.')
 
     nreg = len(region_list)
-    if isinstance(region_list, str): # if not a list, make into list
+    if isinstance(region_list, str):  # if not a list, make into list
         region_list = [region_list]
-    if isinstance(asol_list, str): # if not a list, make into list
+    if isinstance(asol_list, str):  # if not a list, make into list
         asol_list = [asol_list]
 
     # Run asphist to make an aspect histogram for the input evt2 file
@@ -73,11 +76,11 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
         asol_file = 'asol_stack.lst'
         asol_fileobj = open('asol_stack.lst', 'w')
         for asol in asol_list:
-            asol_fileobj.write(asol+'\n')
+            asol_fileobj.write(asol + '\n')
         asol_fileobj.close()
     else:
         asol_file = asol_list[0]
-    if root == None:
+    if root is None:
         reg_root = os.path.splitext(region_list[0])[0]
         indx_reg = reg_root.find('_reg1')
         if indx_reg > 0:
@@ -87,7 +90,7 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
     else:
         asphist_file = root + '_asphist.fits'
     # Check if clobber is set
-    if clobber == True:
+    if clobber:
         clobbertext = 'clobber=yes'
     else:
         clobbertext = ''
@@ -99,13 +102,13 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
     # the number of threads to use.
     # First, if quiet = False, use only one core for clarity;
     # otherwise, the output from multiple processes get mixed up.
-    if quiet == False:
+    if not quiet:
         ncores = 1
-    if ncores == None or ncores > multiprocessing.cpu_count():
+    if ncores is None or ncores > multiprocessing.cpu_count():
         ncores = multiprocessing.cpu_count()
     startindx = 0
     endindx = 0
-    indxdel = int(nreg/ncores)
+    indxdel = int(nreg / ncores)
     if indxdel < 1:
         indxdel = 1
         nthreads = nreg
@@ -118,7 +121,8 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
     for i in range(nthreads):
         startindx = endindx
         endindx = startindx + indxdel
-        if i == nthreads-1: endindx = nreg
+        if i == nthreads - 1:
+            endindx = nreg
         region_sublist = region_list[startindx:endindx]
         threads.append(threading.Thread(target=wextract_worker, args=(region_sublist, evt2_file, pbk_file, asphist_file, msk_file, bpix_file), kwargs={"root":root, "bg_file":bg_file, "bg_region":bg_region, "binning":binning, "clobber":clobber, "quiet":quiet, "pfiles_number":i}))
 
@@ -131,10 +135,10 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
         thr.join()
 
     # Check whether all spectra and responses were extracted successfully
-    print('\nExtraction complete for '+evt2_file+':')
+    print('\nExtraction complete for ' + evt2_file + ':')
     made_all = True
-    for i,region in enumerate(region_list):
-        if root == None:
+    for i, region in enumerate(region_list):
+        if root is None:
             pi_file = os.path.splitext(region)[0] + '_sou.pi'
         else:
             if nreg == 1:
@@ -143,13 +147,17 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
                 pi_file = root + '_' + str(i) + '_sou.pi'
         if not os.path.isfile(pi_file):
             made_all = False
-            print('  No spectra or responses made for region '+region+'.')
-    if made_all == True:
+            print('  No spectra or responses made for region ' +
+                  region + '.')
+    if made_all:
         print('  All spectra and responses made successfully.')
     print(' ')
 
 
-def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bpix_file, root=None, bg_file=None, bg_region=None, binning=None, clobber=False, quiet=False, pfiles_number=None):
+def wextract_worker(region_list, evt2_file, pbk_file, asphist_file,
+                    msk_file, bpix_file, root=None, bg_file=None,
+                    bg_region=None, binning=None, clobber=False,
+                    quiet=False, pfiles_number=None):
     """
     Worker script for wextract that allows multithreading.
 
@@ -171,17 +179,17 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
 
     """
     nreg = len(region_list)
-    binarfwmap = 1 # set this to 2 or more if there are memory problems
+    binarfwmap = 1  # set this to 2 or more if there are memory problems
 
     # Check if clobber is set
-    if clobber == True:
+    if clobber:
         clobbertext = 'clobber=yes'
     else:
         clobbertext = ''
 
     # Check if binning is set
-    if binning != None:
-        binningtext1 = 'binspec='+str(binning)
+    if binning is not None:
+        binningtext1 = 'binspec=' + str(binning)
         binningtext2 = 'grouptype=NUM_CTS'
     else:
         binningtext1 = 'binspec=NONE'
@@ -192,20 +200,20 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
     # environment variable to a temporary directory (although it seems to
     # work fine even without it since pset is not currently used in this script).
     env = os.environ.copy()
-    if pfiles_number != None:
-        pfile_dir = './cxcds_param'+str(pfiles_number)
+    if pfiles_number is not None:
+        pfile_dir = './cxcds_param' + str(pfiles_number)
         if not os.path.exists(pfile_dir):
             os.mkdir(pfile_dir)
         # Set PFILES to a temporary directory in the current directory (note use of ; and :)
         env["PFILES"] = pfile_dir+';'+env["ASCDS_CONTRIB"]+'/param'+':'+env["ASCDS_INSTALL"]+'/param'
 
     # Now loop over regions and do extraction
-    for i,region in enumerate(region_list):
+    for i, region in enumerate(region_list):
         if os.path.isfile(region):
             print('Extracting spectra/responses from region ' + region + '...')
 
             # Define output file names (follow acisspec conventions)
-            if root == None:
+            if root is None:
                 pi_root = os.path.splitext(region)[0] + '_sou'
                 pi_file = pi_root + '.pi'
                 bg_pi_file = os.path.splitext(region)[0] + '_bgd.pi'
@@ -223,8 +231,9 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
             evt2_filter = evt2_file + '[sky=region(' + region + ')]'
             cmd = ['punlearn', 'specextract']
             p = subprocess.call(cmd, env=env)
-            if bg_file == None and bg_region != None:
-                bgtext = 'bkgfile=' + evt2_file + '[sky=region(' + bg_region + ')]'
+            if bg_file is None and bg_region is not None:
+                bgtext = 'bkgfile=' + evt2_file + \
+                         '[sky=region(' + bg_region + ')]'
             else:
                 bgtext = 'bkgfile=NONE'
 
@@ -236,7 +245,7 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
                 p = subprocess.call(cmd, env=env)
 
             # Extract background spectrum if a bg_file is given and a source spectrum was made
-            if bg_file != None and os.path.isfile(pi_file):
+            if bg_file is not None and os.path.isfile(pi_file):
                 cmd = ['punlearn', 'dmextract']
                 p = subprocess.call(cmd, env=env)
                 bg_filter = bg_file + '[sky=region(' + region + ')][bin PI]'
@@ -255,7 +264,7 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
                     p = subprocess.call(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 else:
                     p = subprocess.call(cmd, env=env)
-                if binning != None:
+                if binning is not None:
                     cmd = ['dmhedit', 'infile='+pi_root+'_grp.pi', 'filelist=', 'operation=add', 'key=BACKFILE', 'value='+bg_pi_file]
                     if quiet:
                         p = subprocess.call(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -562,8 +571,9 @@ def make_regions_from_binmap(binmap_file, output_dir,
     for i in range(minbin, maxbin + 1):
         if reg_format == 'ascii':
             # Check that each region file exists before adding it to the list
-            if os.path.isfile(output_dir+'/reg'+str(i)+'.reg'):
-                bin_region_list.append('reg'+str(i)+'.reg')
+            rname = 'reg' + str(i) + '.reg'
+            if os.path.isfile(output_dir + '/' + rname):
+                bin_region_list.append(rname)
         else:
             # Check that each region file exists before adding it to the list
             filename = "reg%d.fits" % i
@@ -581,7 +591,8 @@ def make_regions_from_binmap(binmap_file, output_dir,
     return bin_region_list
 
 
-def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits', clobber = False):
+def transform_regions(region_list, hdr_in, hdr_out, preroot,
+                      reg_format='fits', clobber=False):
     """
     Transforms CIAO region files for use with a different observation.
 
@@ -603,7 +614,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
     if hdr_in == hdr_out:
         new_region_list = []
         for region_file in region_list:
-            if os.path.isfile(preroot + region_file) == False or clobber == True:
+            if clobber or not os.path.isfile(preroot + region_file):
                 if os.path.isfile(preroot + region_file):
                     p = subprocess.call(['rm', '-f', preroot + region_file])
                 p = subprocess.call(['cp', region_file, preroot + region_file])
@@ -631,7 +642,7 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
         if reg_format == 'ascii':
             cur_region_file = open(region_file, "r")
             region = cur_region_file.readlines()
-            if region[0][0] == '#': # remove first line if it's a comment
+            if region[0][0] == '#':  # remove first line if it's a comment
                 has_comment = True
                 region_comment = region[0]
                 region = region[1:]
@@ -639,11 +650,12 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
                 has_comment = False
             cur_region_file.close()
             nreg = len(region)
-            for i in range(nreg): region[i] = region[i].rstrip() # trim newlines
+            for i in range(nreg):
+                region[i] = region[i].rstrip()  # trim newlines
         else:
             import astropy.io.fits as pyfits
             reg_orig = pyfits.open(region_file)
-            region = [reg_orig[1].data] # region parameters are stored in second exten
+            region = [reg_orig[1].data]  # region parameters are stored in second exten
 
         for r, reg in enumerate(region):
             # Find region type
@@ -657,15 +669,15 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
             if reg_type == 'polygon' or reg_type == 'Polygon':
                 # Find coordinates of the vertices
                 if reg_format == 'ascii':
-                    coords = reg[post1+1:-1].split(',')
-                    num_ver = len(coords)/2
+                    coords = reg[post1 + 1:-1].split(',')
+                    num_ver = len(coords) / 2
                 else:
-                    num_ver = numpy.size(reg.X,1)
+                    num_ver = numpy.size(reg.X, 1)
 
                 for i in range(num_ver):
                     if reg_format == 'ascii':
-                        xphys_in = float(coords[i*2])
-                        yphys_in = float(coords[i*2+1])
+                        xphys_in = float(coords[i * 2])
+                        yphys_in = float(coords[i * 2 + 1])
                     else:
                         xphys_in = reg.X[0][i]
                         yphys_in = reg.Y[0][i]
@@ -686,19 +698,19 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
 
                     # Change output image coordinates to physical coordinates if needed
                     if 'CRVAL1P' in hdr_in:
-                        xphys_out=xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
-                        yphys_out=yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
+                        xphys_out = xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
+                        yphys_out = yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
                     else:
                         xphys_out = xim_out
                         yphys_out = yim_out
 
                     # Replace physical coordinates in region with new ones
                     if reg_format == 'ascii':
-                        if i==0:
+                        if i == 0:
                             new_coords_str = '%7.2f,%7.2f' % (xphys_out, yphys_out)
                         else:
                             new_coords_str = new_coords_str + ',%7.2f,%7.2f' % (xphys_out, yphys_out)
-                        region[r] = reg[:post1+1] + new_coords_str + ')\n'
+                        region[r] = reg[:post1 + 1] + new_coords_str + ')\n'
                     else:
                         reg.X[0][i] = xphys_out
                         reg.Y[0][i] = yphys_out
@@ -731,8 +743,8 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
 
                 # Change output image coordinates to physical coordinates if needed
                 if 'CRVAL1P' in hdr_in:
-                    xphys_out=xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
-                    yphys_out=yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
+                    xphys_out = xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
+                    yphys_out = yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
                 else:
                     xphys_out = xim_out
                     yphys_out = yim_out
@@ -743,14 +755,14 @@ def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits'
 
         # Write new region file
         if reg_format == 'ascii':
-            if os.path.isfile(preroot + region_file) == False or clobber == True:
+            if clobber or not os.path.isfile(preroot + region_file):
                 out_region_file = open(preroot + region_file, "w")
                 if has_comment:
                     out_region_file.write(region_comment)
                 out_region_file.writelines(region)
                 out_region_file.close()
         else:
-            if os.path.isfile(preroot + region_file) == False or clobber == True:
+            if clobber or not os.path.isfile(preroot + region_file):
                 reg_orig.writeto(preroot + region_file, clobber=True)
 
     new_region_list = []
@@ -849,7 +861,7 @@ def xy2ad(x, y, hdr):
     return a, d
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
 
     from optparse import OptionParser
     parser = OptionParser(usage='%prog [options] <region_file> <evt2_file> <pbk_file> <asol_file> <msk_file>\n\nArguments:\n  <region_file>  region file in CIAO format (may be list; if so, prepend filename with "@")\n  <evt2_file>    events file\n  <pbk_file>     pbk0 file\n  <asol_file>    asol1 file (may be list; if so, prepend filename with "@")\n  <msk_file>     msk1 file', version="%prog 0.5")
@@ -881,6 +893,8 @@ if __name__=='__main__':
         asol_list = stack_to_list(asol_file)
 
         # Do extraction using threads
-        wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, root=root, bg_file=bg_file, bg_region=bg_region, binning=binning, ncores=ncores, clobber=clobber)
+        wextract(region_list, evt2_file, pbk_file, asol_list, msk_file,
+                 root=root, bg_file=bg_file, bg_region=bg_region,
+                 binning=binning, ncores=ncores, clobber=clobber)
     else:
         parser.print_help()
