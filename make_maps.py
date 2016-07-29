@@ -81,6 +81,7 @@ from fit_spectra import call_sherpa_1T, call_sherpa_1T_plus_pow, \
 from sherpa.astro.ui import calc_ftest
 from misc_functions import combine_spectra, stack_to_list
 
+import pycrates
 import astropy.io.fits as pyfits
 
 # Check that CIAO was initialized
@@ -113,9 +114,20 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None,
     """
     # Check if min bin is negative or starts or ends on the image boundary.
     # If so, assume it is not wanted (e.g., for wvt bin maps).
-    import astropy.io.fits as pyfits
-    binmap = pyfits.open(binmap_file, mode="readonly")
-    binimage = binmap[0].data
+    #
+    # Using the pycrates.read_file routine returns a single block in
+    # the file. This means when it is written out, any other blocks
+    # are lost (other than associated GTI blocks). As it is not clear
+    # whether this is an issue here, I use pycrates.CrateDataset to
+    # read in the whole file.
+    #
+    ds = pycrates.CrateDataset(binmap_file, mode='r')
+
+    # Assume the image data is in the first block
+    cr = ds.get_crate(0)
+    assert isinstance(cr, pycrates.IMAGECrate)
+
+    binimage = cr.get_image().values
     minbin = int(binimage.min())
     maxbin = int(binimage.max())
     if minbin < 0:
@@ -415,84 +427,65 @@ def paint_map(binmap_file, fit_file, vars_to_map, root=None,
 
     if root is None:
         root = 'output'
+
+    def saveimg(idata, suffix):
+        """Write out the data using the given suffix."""
+        cr.get_image().values = idata
+        ds.write(root + suffix, clobber=clobber)
+
+    has_2cpt = second_comp == 'mekal' or second_comp == 'apec'
     if 'kT' in vars_to_map:
-        if second_comp == 'mekal' or second_comp == 'apec':
-            binmap[0].data = binimage_kT1
-            binmap.writeto(root + '_kT1_map.fits', clobber=clobber)
-            binmap[0].data = binimage_kT2
-            binmap.writeto(root + '_kT2_map.fits', clobber=clobber)
+        if has_2cpt:
+            saveimg(binimage_kT1, '_kT1_map.fits')
+            saveimg(binimage_kT2, '_kT2_map.fits')
         else:
-            binmap[0].data = binimage_kT
-            binmap.writeto(root + '_kT_map.fits', clobber=clobber)
+            saveimg(binimage_kT, '_kT_map.fits')
     if 'Z' in vars_to_map:
-        if second_comp == 'mekal' or second_comp == 'apec':
-            binmap[0].data = binimage_Z1
-            binmap.writeto(root + '_Z1_map.fits', clobber=clobber)
-            binmap[0].data = binimage_Z2
-            binmap.writeto(root + '_Z2_map.fits', clobber=clobber)
+        if has_2cpt:
+            saveimg(binimage_Z1, '_Z1_map.fits')
+            saveimg(binimage_Z2, '_Z2_map.fits')
         else:
-            binmap[0].data = binimage_Z
-            binmap.writeto(root + '_Z_map.fits', clobber=clobber)
+            saveimg(binimage_Z, '_Z_map.fits')
     if 'plindx' in vars_to_map:
-        binmap[0].data = binimage_plindx
-        binmap.writeto(root + '_plindx_map.fits', clobber=clobber)
+        saveimg(binimage_plindx, '_plindx_map.fits')
     if 'mdot' in vars_to_map:
-        binmap[0].data = binimage_mkcnorm
-        binmap.writeto(root + '_mdot_map.fits', clobber=clobber)
+        saveimg(binimage_mkcnorm, '_mdot_map.fits')
     if 'nH' in vars_to_map:
-        binmap[0].data = binimage_nH
-        binmap.writeto(root + '_nH_map.fits', clobber=clobber)
+        saveimg(binimage_nH, '_nH_map.fits')
     if 'norm' in vars_to_map:
-        if second_comp == 'mekal' or second_comp == 'apec':
-            binmap[0].data = binimage_norm1
-            binmap.writeto(root + '_norm1_map.fits', clobber=clobber)
-            binmap[0].data = binimage_norm2
-            binmap.writeto(root + '_norm2_map.fits', clobber=clobber)
+        if has_2cpt:
+            saveimg(binimage_norm1, '_norm1_map.fits')
+            saveimg(binimage_norm2, '_norm2_map.fits')
         else:
-            binmap[0].data = binimage_norm
-            binmap.writeto(root + '_norm_map.fits', clobber=clobber)
+            saveimg(binimage_norm, '_norm_map.fits')
     if 'fkT' in vars_to_map:
-        if second_comp == 'mekal' or second_comp == 'apec':
-            binmap[0].data = binimage_fkT1
-            binmap.writeto(root + '_fkT1_map.fits', clobber=clobber)
-            binmap[0].data = binimage_fkT2
-            binmap.writeto(root + '_fkT2_map.fits', clobber=clobber)
+        if has_2cpt:
+            saveimg(binimage_fkT1, '_fkT1_map.fits')
+            saveimg(binimage_fkT2, '_fkT2_map.fits')
         else:
-            binmap[0].data = binimage_fkT
-            binmap.writeto(root + '_fkT_map.fits', clobber=clobber)
+            saveimg(binimage_fkT, '_fkT_map.fits')
     if 'fZ' in vars_to_map:
-        if second_comp == 'mekal' or second_comp == 'apec':
-            binmap[0].data = binimage_fZ1
-            binmap.writeto(root + '_fZ1_map.fits', clobber=clobber)
-            binmap[0].data = binimage_fZ2
-            binmap.writeto(root + '_fZ2_map.fits', clobber=clobber)
+        if has_2cpt:
+            saveimg(binimage_fZ1, '_fZ1_map.fits')
+            saveimg(binimage_fZ2, '_fZ2_map.fits')
         else:
-            binmap[0].data = binimage_fZ
-            binmap.writeto(root + '_fZ_map.fits', clobber=clobber)
+            saveimg(binimage_fZ, '_fZ_map.fits')
     if 'fnorm' in vars_to_map:
-        if second_comp == 'mekal' or second_comp == 'apec':
-            binmap[0].data = binimage_fnorm1
-            binmap.writeto(root + '_fnorm1_map.fits', clobber=clobber)
-            binmap[0].data = binimage_fnorm2
-            binmap.writeto(root + '_fnorm2_map.fits', clobber=clobber)
+        if has_2cpt:
+            saveimg(binimage_fnorm1, '_fnorm1_map.fits')
+            saveimg(binimage_fnorm2, '_fnorm2_map.fits')
         else:
-            binmap[0].data = binimage_fnorm
-            binmap.writeto(root + '_fnorm_map.fits', clobber=clobber)
+            saveimg(binimage_fnorm, '_fnorm_map.fits')
     if 'fplindx' in vars_to_map:
-        binmap[0].data = binimage_fplindx
-        binmap.writeto(root + '_fplindx_map.fits', clobber=clobber)
+        saveimg(binimage_fplindx, '_fplindx_map.fits')
     if 'fmdot' in vars_to_map:
-        binmap[0].data = binimage_fmkcnorm
-        binmap.writeto(root + '_fmdot_map.fits', clobber=clobber)
+        saveimg(binimage_fmkcnorm, '_fmdot_map.fits')
     if 'fnH' in vars_to_map:
-        binmap[0].data = binimage_fnH
-        binmap.writeto(root + '_fnH_map.fits', clobber=clobber)
+        saveimg(binimage_fnH, '_fnH_map.fits')
     if 'chi2' in vars_to_map:
-        binmap[0].data = binimage_chi2
-        binmap.writeto(root + '_chi2_map.fits', clobber=clobber)
+        saveimg(binimage_chi2, '_chi2_map.fits')
     if Fprob is not None:
-        binmap[0].data = binimage_Fprob
-        binmap.writeto(root + '_Ftest_map.fits', clobber=clobber)
+        saveimg(binimage_Fprob, '_Ftest_map.fits')
 
 
 def read_fit_results(filename, second_comp=None):
