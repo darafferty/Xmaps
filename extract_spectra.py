@@ -25,11 +25,13 @@ import numpy
 import multiprocessing
 import threading
 import sys
-from misc_functions import stack_to_list
+import shutil
 
 import pycrates
 import pytransform
 import stk
+
+from misc_functions import stack_to_list
 
 if os.environ.get("CALDB") is None:
     sys.exit('Please initalize CIAO before running.')
@@ -589,6 +591,196 @@ def make_regions_from_binmap(binmap_file, output_dir,
             else:
                 print("Warning: not using %s" % filename)
     return bin_region_list
+
+
+def copy_regions(region_list, preroot):
+    """Copy regions to new names.
+
+    This is for when the input and output coordinate coordinate
+    systems are the same.
+    """
+
+    new_region_list = []
+    for region_file in region_list:
+        newname = preroot + region_file
+        if clobber or not os.path.isfile(newname):
+            if os.path.isfile(newname):
+                subprocess.check_call(['rm', '-f', newname])
+
+            shutil.copy(region_file, newname)
+            new_region_list.append(newname)
+
+    return new_region_list
+
+
+def transform_region_ascii(infile, outfile, wcs_in, wcs_out):
+    """Transform coordinates in ASCII input file.
+
+    This routine is called assuming the output file is to
+    be clobbered if it already exists.
+    """
+
+    with open(infile, 'r') as fh:
+        regions = fh.readlines()
+
+    with open(outfile, 'w') as ofh:
+        for region in regions:
+            if region.startswith('#'):
+                ofh.write(region + '\n')
+                continue
+
+            region = region.rstrip()
+            post0 = 0
+            post1 = region.find("(")
+            reg_type = region[post0:post1]
+
+            if reg_type in ['polygon', 'Polygon']:
+                # convert from a 1D array into a 2D one
+                coords_in = [float(f)
+                             for f in region[post1 + 1:-1].split(',')]
+
+                assert coords_in.size % 2 == 0
+                # Use integer division here
+                coords_in.resize(2, coords_in.size // 2)
+
+                # The conversion can be applied to all the
+                # pairs at once, but it requires the data be
+                # in the "right" shape.
+                #
+                coords_cel = wcs_in.apply(coords_in.T)
+                coords_out = wcs_out.invert(coords_cel)
+
+                # The coords_out array is not transposed (to
+                # match the input) since it makes it easier
+                # to convert back to a string.
+                coords_str = ",".join(["{:7.2f}".format(c)
+                                       for c in coords_out])
+
+                out = reg_type + '(' + coords_str + ')'
+
+            elif reg_type == 'rotbox':
+
+                # Just need to convert the center of the box, since
+                # the assumption is that the pixel scale is the
+                # same in both the input and output systems.
+                #
+                toks = region[post1 + 1:].split(",")
+                assert len(toks) > 2
+
+                xphys_in = float(toks[0])
+                yphys_in = float(toks[1])
+
+                # The handling of nD arrays by the apply and invert
+                # methods of transform objects is, at best, strange
+                # to describe.
+                #
+                coords_cel = wcs_in.apply([[xphys_in, yphys_in]])
+                coords_out = wcs_out.invert(coords_cel)
+
+                xphys_out = coords_out[0][0]
+                yphys_out = coords_out[0][1]
+                coords_str = '{:7.2f},{:7.2f},'.format(xphys_out,
+                                                       yphys_out)
+
+                # Hopefully this re-creates the remainded of the
+                # string (i.e. after the center of the box).
+                #
+                out = reg_type + '(' + coords_str + ",".join(toks[2:])
+
+            else:
+                # copy over the line
+                out = region
+
+            ofh.write(out + '\n')
+
+
+def transform_region_fits(infile, outfile, wcs_in, wcs_out):
+    """Transform coordinates in FITS input file.
+
+    This routine is called assuming the output file is to
+    be clobbered if it already exists.
+    """
+
+    # Read in the whole file in case there are any other interesting
+    # blocks in the file that should be retained.
+    #
+    ds = pycrates.CrateDataset(infile, mode='r')
+    cr = ds.get_crate(2)
+    assert isinstance(cr, pycrates.TABLECrate)
+
+    shapes = cr.get_column('SHAPE').values
+    pos = cr.get_column('POS').values
+
+    # Since the shapes are being processed on a row-by-row bases,
+    # do not try and convert all the coordinates in one go (which
+    # is supported by the apply and invert methods).
+    #
+    for i in xrange(0, cr.get_nrows()):
+
+        shape = shapes[i].upper()
+        if shape == 'POLYGON':
+
+            coords_cel = wcs_in.apply(pos[i].T)
+            coords_out = wcs_out.invert(coords_cel).T
+
+            # Overwrite this row
+            pos[i] = coords_out
+
+        elif shape == 'ROTBOX':
+            # It should be possible to encode ROTBOX in CXC FITS
+            # region files.
+            #
+            sys.exit('ERROR: Sorry, only polygons are currently supported for FITS regions.')
+
+    cr.get_column('POS').values = pos
+    ds.write(outfile, clobber=True)
+
+
+def transform_regions_new(region_list, wcs_in, wcs_out, preroot,
+                          reg_format='fits', clobber=False):
+    """
+    Transforms CIAO region files for use with a different observation.
+
+    Inputs:  region_list - list of region file(s) in CIAO format
+             wcs_in - EQPOS transform for input coordinate system
+                      (physical to celestial)
+             wcs_out - EQPOS transform for output coordinate system
+                       (physical to celestial)
+             preroot - prepend string for output region files
+             reg_format - format of input/ouput region files
+                          ('fits' or 'ascii'); default = 'fits'
+             clobber - if True, overwrite any existing files
+
+    Ouputs:  New region files, prepended with the preroot.
+
+    Returns: A list of the adjusted regions.
+
+    It is assumed that sky_in and sky_out are different; if they
+    are the same use copy_regions().
+
+    """
+
+    if reg_format == 'ascii':
+        func = transform_region_ascii
+    elif reg_format == 'fits':
+        func = transform_region_fits
+    else:
+        raise ValueError("Unsupported reg_format=" + reg_format)
+
+    outfiles = []
+    for region_file in region_list:
+
+        # Do not do anything if the output file already exists and
+        # clobber is not set.
+        #
+        outfile = preroot + region_file
+        outfiles.append(outfile)
+        if not clobber and os.path.exists(outfile):
+            continue
+
+        func(region_file, outfile, wcs_in, wcs_out)
+
+    return outfiles
 
 
 def transform_regions(region_list, hdr_in, hdr_out, preroot,

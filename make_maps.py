@@ -82,7 +82,6 @@ from sherpa.astro.ui import calc_ftest
 from misc_functions import combine_spectra, stack_to_list
 
 import pycrates
-import astropy.io.fits as pyfits
 
 # Check that CIAO was initialized
 if os.environ.get("CALDB") is None:
@@ -741,6 +740,7 @@ if __name__ == '__main__':
 
         # Extract the spectra and responses
         if not skip_extract:
+            import astropy.io.fits as pyfits
             os.chdir(root + '_spectra')
             hdr_obs1 = pyfits.getheader(evt2_list[0], 1)
             for j in range(nobs):
