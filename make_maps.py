@@ -531,9 +531,16 @@ def apply_binning_to_image(binmap_file, image_file, root=None, clobber=False):
 
     # Check if min bin is negative or starts or ends on the image boundary.
     # If so, assume it is not wanted (e.g., for wvt bin maps).
-    import astropy.io.fits as pyfits
-    binmap = pyfits.open(binmap_file)
-    binimage = binmap[0].data
+    #
+    # Use a CrateDataset to read in the file to ensure any "extra"
+    # blocks are retained. If this is not needed then
+    # pycrates.read_file could be used here.
+    #
+    ds = pycrates.CrateDataset(binmap_file, mode='r')
+    cr = ds.get_crate(0)
+    assert isinstance(cr, pycrates.IMAGECrate)
+
+    binimage = cr.get_image().values
     minbin = int(binimage.min())
     maxbin = int(binimage.max())
     if minbin < 0:
@@ -542,8 +549,10 @@ def apply_binning_to_image(binmap_file, image_file, root=None, clobber=False):
     if 0 in inbin[0] or numpy.size(binimage, 0) - 1 in inbin[0]:
         minbin += 1
     nbins = maxbin - minbin + 1
-    image = pyfits.open(image_file)
-    im = image[0].data
+
+    icr = pycrates.read_file(image_file)
+    assert isinstance(icr, pycrates.IMAGECrate)
+    im = icr.get_image().values
 
     # Check that the binmap and image have the same shape
     if binimage.shape != im.shape:
@@ -556,8 +565,8 @@ def apply_binning_to_image(binmap_file, image_file, root=None, clobber=False):
         inbin = numpy.where(binimage == i + minbin)
         binimage_out[inbin] = numpy.mean(im[inbin])
 
-    binmap[0].data = binimage_out
-    binmap.writeto(root + '.fits', clobber=clobber)
+    cr.get_image().values = binimage_out
+    ds.write(root + '.fits', clobber=clobber)
 
 
 def compare_fits(fit1_file, fit2_file, second_comp, null_prob=0.05):
