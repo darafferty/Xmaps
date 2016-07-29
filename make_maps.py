@@ -82,6 +82,7 @@ from sherpa.astro.ui import calc_ftest
 from misc_functions import combine_spectra, stack_to_list
 
 import pycrates
+import pytransform
 
 # Check that CIAO was initialized
 if os.environ.get("CALDB") is None:
@@ -612,6 +613,80 @@ def compare_fits(fit1_file, fit2_file, second_comp, null_prob=0.05):
             index_of_pref.append(1)
     return index_of_pref, Fprob_list
 
+
+def read_wcs_transform(infile, blocknum):
+    """Read in the physical to celestial transform from the file.
+
+    Return a WCSTransform object that represents the physical to
+    celestial - e.g. SKY (Chandra)/POS (XMM) to Ra,Dec - from the
+    given block.
+
+    Parameters
+    ----------
+    infile : str
+        The name of the file to read in.
+    blocknum : int
+        The block number to use: this follows CFITSIO convention,
+        rather than the CXC DM, and numbers the first block 0.
+        If the block is a table then the column "EQPOS" and then
+        "EQSRC" is searched for. If it is an image then the first
+        axis that returns a WCSTransform is used. If no transform
+        is found an IOError is raised
+        (and then hopefully the logic here tweaked to support the
+        "problem" file structure).
+
+    Returns
+    -------
+    tr
+        A pytransform.WCSTransform object.
+
+    Notes
+    -----
+    It attempts to be somewhat general, and support images or tables,
+    but it does rely on the FITS header information being "Chandra
+    like".
+    """
+
+    # The get_crate routine uses 0 to indicate the "interesting"
+    # (or default) block to open, so need to add 1 to blocknum.
+    #
+    ds = pycrates.CrateDataset(infile, mode='r')
+    cr = ds.get_crate(blocknum + 1)
+
+    if isinstance(cr, pycrates.TABLECrate):
+        for name in ['EQPOS', 'EQSRC']:
+            try:
+                tr = cr.get_transform(name)
+            except ValueError:
+                continue
+
+            # In older CIAO's this could be WCSTanTransform
+            if isinstance(tr, pytransform.WCSTransform):
+                return tr
+
+        raise IOError("No transform found from table {}".format(infile))
+
+    elif isinstance(cr, pycrates.IMAGECrate):
+
+        # loop through all the axes; can probably guarantee
+        # that the first one is not relevant, but just in case.
+        #
+        for axis in cr.get_axisnames():
+            try:
+                tr = cr.get_transform(axis)
+            except KeyError:
+                continue
+
+            # In older CIAO's this could be WCSTanTransform
+            if isinstance(tr, pytransform.WCSTransform):
+                return tr
+
+        raise IOError("No transform found from image {}".format(infile))
+
+    else:
+        raise IOError("Unexpected crate: {}".format(type(cr)))
+
+
 if __name__ == '__main__':
     from optparse import OptionParser
     parser = OptionParser(usage='%prog [options] <binmap> <evt2_file> <bg_file> <pbk_file> <asol_file> <msk_file> <bpix_file> <redshift> <nH_Gal> <root>\n\nArguments:\n  <binmap>      map of bins, with values equal to bin number\n  <evt2_file>   events file or file of list of events files (e.g., @evt2.list)\n  <bg_file>     background file or file of list of background files (e.g., @bg.list)\n  <pbk_file>    pbk0 file or file of list of pbk0 files (e.g., @pbk0.list)\n  <asol_file>   asol1 file or file of list of asol1 files (e.g., @asol1.list).\n                If there are more than one asol1 files for an observation,\n                list them on one line, separated with a comma and ordered by time\n  <msk_file>    msk1 file or file of list of msk1 files (e.g., @msk1.list)\n  <bpix_file>    bad pixel file or file of list of bad pixel files (e.g., @bpix.list)\n  <redshift>    redshift of source\n  <nH_Gal>      Galactic N_H (10^22 cm^-2)\n  <root>        root of output map(s)', version="%prog 0.6")
@@ -740,17 +815,27 @@ if __name__ == '__main__':
 
         # Extract the spectra and responses
         if not skip_extract:
-            import astropy.io.fits as pyfits
             os.chdir(root + '_spectra')
-            hdr_obs1 = pyfits.getheader(evt2_list[0], 1)
+            wcs_tr0 = read_wcs_transform(evt2_list[0], 1)
             for j in range(nobs):
-                if j == 0:
-                    region_list = transform_regions(region_list_binmap, hdr_obs1, hdr_obs1, 'obs'+str(j+1)+'_', clobber=clobber)
+                jroot = 'obs' + str(j + 1) + '_'
+                if evt2_list[j] == evt2_list[0]:
+                    region_list = copy_regions(region_list_binmap,
+                                               jroot, clobber=clobber)
                 else:
-                    hdr = pyfits.getheader(evt2_list[j], 1)
-                    region_list = transform_regions(region_list_binmap, hdr_obs1, hdr, 'obs'+str(j+1)+'_', clobber=clobber)
+                    wcs_trj = read_wcs_transform(evt2_list[j], 1)
+                    region_list = transform_regions(region_list_binmap,
+                                                    wcs_tr0,
+                                                    wcs_trj,
+                                                    jroot,
+                                                    clobber=clobber)
 
-                wextract(region_list, evt2_list[j], pbk_list[j], asol_list[j], msk_list[j], bg_file=bg_list[j], bpix_file=bpix_list[j], binning=binning_extract, quiet=quiet, clobber=clobber)
+                wextract(region_list, evt2_list[j], pbk_list[j],
+                         asol_list[j], msk_list[j],
+                         bg_file=bg_list[j], bpix_file=bpix_list[j],
+                         binning=binning_extract, quiet=quiet,
+                         clobber=clobber)
+
             os.chdir('..')
 
         # Fit the spectra

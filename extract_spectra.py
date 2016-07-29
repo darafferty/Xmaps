@@ -12,8 +12,6 @@ The following routines are included:
                              a binmap
   transform_regions - transform CIAO region files defined using
                       one observation to another
-  ad2xy - transform ra, dec to x, y image coordinates
-  xy2ad - transform x, y image coordinates to ra, dec
 
 Version 0.6: 3/5/2011 - Updated for Ciao 4.3
 Version 0.7: 1/11/2013 - Updated for Ciao 4.5
@@ -593,7 +591,7 @@ def make_regions_from_binmap(binmap_file, output_dir,
     return bin_region_list
 
 
-def copy_regions(region_list, preroot):
+def copy_regions(region_list, preroot, clobber=False):
     """Copy regions to new names.
 
     This is for when the input and output coordinate coordinate
@@ -708,6 +706,10 @@ def transform_region_fits(infile, outfile, wcs_in, wcs_out):
     cr = ds.get_crate(2)
     assert isinstance(cr, pycrates.TABLECrate)
 
+    # NOTE: the EQPOS column could be read directly, which would
+    # avoid the need to convert the input file from physical to
+    # celestial coordinates.
+    #
     shapes = cr.get_column('SHAPE').values
     pos = cr.get_column('POS').values
 
@@ -736,8 +738,8 @@ def transform_region_fits(infile, outfile, wcs_in, wcs_out):
     ds.write(outfile, clobber=True)
 
 
-def transform_regions_new(region_list, wcs_in, wcs_out, preroot,
-                          reg_format='fits', clobber=False):
+def transform_regions(region_list, wcs_in, wcs_out, preroot,
+                      reg_format='fits', clobber=False):
     """
     Transforms CIAO region files for use with a different observation.
 
@@ -781,276 +783,6 @@ def transform_regions_new(region_list, wcs_in, wcs_out, preroot,
         func(region_file, outfile, wcs_in, wcs_out)
 
     return outfiles
-
-
-def transform_regions(region_list, hdr_in, hdr_out, preroot,
-                      reg_format='fits', clobber=False):
-    """
-    Transforms CIAO region files for use with a different observation.
-
-    Inputs:  region_list - list of region file(s) in CIAO format
-             hdr_in - pyfits header of for input regions
-             hdr_out - pyfits header of output regions
-             preroot - prepend string for output region files
-             reg_format - format of input/ouput region files ('fits' or 'ascii');
-                          default = 'fits'
-             clobber - if True, overwrite any existing files
-
-    Ouputs:  New region files, prepended with the preroot.
-
-    Returns: A list of the adjusted regions.
-
-    """
-    # Check if input and output headers are the same. If so,
-    # just copy region files to new names.
-    if hdr_in == hdr_out:
-        new_region_list = []
-        for region_file in region_list:
-            if clobber or not os.path.isfile(preroot + region_file):
-                if os.path.isfile(preroot + region_file):
-                    p = subprocess.call(['rm', '-f', preroot + region_file])
-                p = subprocess.call(['cp', region_file, preroot + region_file])
-                new_region_list.append(preroot + region_file)
-        return new_region_list
-
-    # Get pixel scale parameters out of the input header
-    # if it is the header of an image
-    if 'CRVAL1P' in hdr_in:
-        CRVAL1P_in = hdr_in['CRVAL1P']
-        CRPIX1P_in = hdr_in['CRPIX1P']
-        CDELT1P_in = hdr_in['CDELT1P']
-        CRVAL2P_in = hdr_in['CRVAL2P']
-        CRPIX2P_in = hdr_in['CRPIX2P']
-        CDELT2P_in = hdr_in['CDELT2P']
-        CRVAL1P_out = hdr_out['CRVAL1P']
-        CRPIX1P_out = hdr_out['CRPIX1P']
-        CDELT1P_out = hdr_out['CDELT1P']
-        CRVAL2P_out = hdr_out['CRVAL2P']
-        CRPIX2P_out = hdr_out['CRPIX2P']
-        CDELT2P_out = hdr_out['CDELT2P']
-
-    for region_file in region_list:
-        # Read in regions
-        if reg_format == 'ascii':
-            cur_region_file = open(region_file, "r")
-            region = cur_region_file.readlines()
-            if region[0][0] == '#':  # remove first line if it's a comment
-                has_comment = True
-                region_comment = region[0]
-                region = region[1:]
-            else:
-                has_comment = False
-            cur_region_file.close()
-            nreg = len(region)
-            for i in range(nreg):
-                region[i] = region[i].rstrip()  # trim newlines
-        else:
-            import astropy.io.fits as pyfits
-            reg_orig = pyfits.open(region_file)
-            region = [reg_orig[1].data]  # region parameters are stored in second exten
-
-        for r, reg in enumerate(region):
-            # Find region type
-            if reg_format == 'ascii':
-                post0 = 0
-                post1 = reg.find("(")
-                reg_type = reg[post0:post1]
-            else:
-                reg_type = reg.SHAPE[0]
-
-            if reg_type == 'polygon' or reg_type == 'Polygon':
-                # Find coordinates of the vertices
-                if reg_format == 'ascii':
-                    coords = reg[post1 + 1:-1].split(',')
-                    num_ver = len(coords) / 2
-                else:
-                    num_ver = numpy.size(reg.X, 1)
-
-                for i in range(num_ver):
-                    if reg_format == 'ascii':
-                        xphys_in = float(coords[i * 2])
-                        yphys_in = float(coords[i * 2 + 1])
-                    else:
-                        xphys_in = reg.X[0][i]
-                        yphys_in = reg.Y[0][i]
-
-                    # Change physical coordinates to image coordinates if needed
-                    if 'CRVAL1P' in hdr_in:
-                        xim_in = (xphys_in - CRVAL1P_in - CRPIX1P_in) / CDELT1P_in
-                        yim_in = (yphys_in - CRVAL2P_in - CRPIX2P_in) / CDELT2P_in
-                    else:
-                        xim_in = xphys_in
-                        yim_in = yphys_in
-
-                    # Change image coordinates to ra, dec
-                    a, d = xy2ad(xim_in, yim_in, hdr_in)
-
-                    # Change ra, dec to output image coordinates
-                    xim_out, yim_out = ad2xy(a, d, hdr_out)
-
-                    # Change output image coordinates to physical coordinates if needed
-                    if 'CRVAL1P' in hdr_in:
-                        xphys_out = xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
-                        yphys_out = yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
-                    else:
-                        xphys_out = xim_out
-                        yphys_out = yim_out
-
-                    # Replace physical coordinates in region with new ones
-                    if reg_format == 'ascii':
-                        if i == 0:
-                            new_coords_str = '%7.2f,%7.2f' % (xphys_out, yphys_out)
-                        else:
-                            new_coords_str = new_coords_str + ',%7.2f,%7.2f' % (xphys_out, yphys_out)
-                        region[r] = reg[:post1 + 1] + new_coords_str + ')\n'
-                    else:
-                        reg.X[0][i] = xphys_out
-                        reg.Y[0][i] = yphys_out
-
-            if reg_type == 'rotbox':
-                if reg_format == 'fits':
-                    sys.exit('ERROR: Sorry, only polygons are currently supported for FITS regions.')
-
-                # Find center(s) in physical coordinates
-                posx0 = reg.find("(") + 1
-                posx1 = reg.find(",")
-                xphys_in = float(reg[posx0:posx1])
-                posy0 = posx1 + 1
-                posy1 = posy0 + reg[posy0:].find(",")
-                yphys_in = float(reg[posy0:posy1])
-
-                # Change physical coordinates to image coordinates if needed
-                if 'CRVAL1P' in hdr_in:
-                    xim_in = (xphys_in - CRVAL1P_in - CRPIX1P_in) / CDELT1P_in
-                    yim_in = (yphys_in - CRVAL2P_in - CRPIX2P_in) / CDELT2P_in
-                else:
-                    xim_in = xphys_in
-                    yim_in = yphys_in
-
-                # Change image coordinates to ra, dec
-                a, d = xy2ad(xim_in, yim_in, hdr_in)
-
-                # Change ra, dec to output image coordinates
-                xim_out, yim_out = ad2xy(a, d, hdr_out)
-
-                # Change output image coordinates to physical coordinates if needed
-                if 'CRVAL1P' in hdr_in:
-                    xphys_out = xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
-                    yphys_out = yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
-                else:
-                    xphys_out = xim_out
-                    yphys_out = yim_out
-
-                # Replace physical coordinates in region with new ones
-                new_coords_str = '%7.2f,%7.2f' % (xphys_out, yphys_out)
-                region[r] = reg[:posx0] + new_coords_str + reg[posy1:] + '\n'
-
-        # Write new region file
-        if reg_format == 'ascii':
-            if clobber or not os.path.isfile(preroot + region_file):
-                out_region_file = open(preroot + region_file, "w")
-                if has_comment:
-                    out_region_file.write(region_comment)
-                out_region_file.writelines(region)
-                out_region_file.close()
-        else:
-            if clobber or not os.path.isfile(preroot + region_file):
-                reg_orig.writeto(preroot + region_file, clobber=True)
-
-    new_region_list = []
-    for i in range(len(region_list)):
-        new_region_list.append(preroot + region_list[i])
-    return new_region_list
-
-
-def ad2xy(a, d, hdr):
-    """
-    Transforms ra, dec to image coordinates.
-
-    Inputs:  a - ra in degrees
-             d - dec in degrees
-             hdr - pyfits header containing WCS info
-
-    Returns: x, y image coordinates corresponding to a, d
-
-    """
-    if 'CRVAL1P' in hdr: # -> header of an image
-        CRVAL1 = hdr['CRVAL1P']
-        CRPIX1 = hdr['CRPIX1P']
-        CDELT1 = hdr['CDELT1P']
-        CRVAL2 = hdr['CRVAL2P']
-        CRPIX2 = hdr['CRPIX2P']
-        CDELT2 = hdr['CDELT2P']
-    else: # -> header of an events file
-        CRVAL1 = hdr['TCRVL11']
-        CRPIX1 = hdr['TCRPX11']
-        CDELT1 = hdr['TCDLT11']
-        CRVAL2 = hdr['TCRVL12']
-        CRPIX2 = hdr['TCRPX12']
-        CDELT2 = hdr['TCDLT12']
-
-    cd_mat = numpy.matrix([[1.0, 0.0], [0.0, 1.0]]) # assume no rotation for Chandra images
-    cd_mat[0,0] = cd_mat[0,0] * CDELT1
-    cd_mat[0,1] = cd_mat[0,1] * CDELT1
-    cd_mat[1,1] = cd_mat[1,1] * CDELT2
-    cd_mat[1,0] = cd_mat[1,0] * CDELT2
-
-    radeg = 180.0 / numpy.pi
-    h = numpy.sin(d / radeg) * numpy.sin(CRVAL2 / radeg) + numpy.cos(d / radeg) * numpy.cos(CRVAL2 / radeg) * numpy.cos(a / radeg - CRVAL1 / radeg)
-    xsi = numpy.cos(d / radeg) * numpy.sin(a / radeg - CRVAL1 / radeg) / h * radeg
-    eta = (numpy.sin(d / radeg) * numpy.cos(CRVAL2 / radeg) - numpy.cos(d / radeg) * numpy.sin(CRVAL2 / radeg) * numpy.cos(a / radeg - CRVAL1 / radeg)) / h * radeg
-    cdinv = cd_mat.I
-    xdif = cdinv[0,0] * xsi + cdinv[0,1] * eta
-    ydif = cdinv[1,0] * xsi + cdinv[1,1] * eta
-    x = xdif + CRPIX1 - 1
-    y = ydif + CRPIX2 - 1
-
-    return x, y
-
-
-def xy2ad(x, y, hdr):
-    """
-    Transforms image coordinates to ra, dec.
-
-    Inputs:  x - x image coordinate
-             y - y image coordinate
-             hdr - pyfits header containing WCS info
-
-    Returns: ra, dec corresponding to x, y
-
-    """
-    if 'CRVAL1P' in hdr: # -> header of an image
-        CRVAL1 = hdr['CRVAL1P']
-        CRPIX1 = hdr['CRPIX1P']
-        CDELT1 = hdr['CDELT1P']
-        CRVAL2 = hdr['CRVAL2P']
-        CRPIX2 = hdr['CRPIX2P']
-        CDELT2 = hdr['CDELT2P']
-    else: # -> header of an events file
-        CRVAL1 = hdr['TCRVL11']
-        CRPIX1 = hdr['TCRPX11']
-        CDELT1 = hdr['TCDLT11']
-        CRVAL2 = hdr['TCRVL12']
-        CRPIX2 = hdr['TCRPX12']
-        CDELT2 = hdr['TCDLT12']
-
-    cd_mat = numpy.matrix([[1.0, 0.0], [0.0, 1.0]]) # assume no rotation for Chandra images
-    cd_mat[0,0] = cd_mat[0,0] * CDELT1
-    cd_mat[0,1] = cd_mat[0,1] * CDELT1
-    cd_mat[1,1] = cd_mat[1,1] * CDELT2
-    cd_mat[1,0] = cd_mat[1,0] * CDELT2
-
-    xdif = x - (CRPIX1 - 1)
-    ydif = y - (CRPIX2 - 1)
-    xsi = cd_mat[0,0] * xdif + cd_mat[0,1] * ydif
-    eta = cd_mat[1,0] * xdif + cd_mat[1,1] * ydif
-    radeg = 180.0 / numpy.pi
-    beta = numpy.cos(CRVAL2 / radeg) - eta / radeg * numpy.sin(CRVAL2 / radeg)
-    a = (numpy.arctan2(xsi / radeg, beta) + CRVAL1 / radeg) * radeg
-    gamma = numpy.sqrt((xsi / radeg)**2 + beta**2)
-    d = numpy.arctan2(eta / radeg * numpy.cos(CRVAL2 / radeg) + numpy.sin(CRVAL2 / radeg), gamma) * radeg
-
-    return a, d
 
 
 if __name__ == '__main__':
