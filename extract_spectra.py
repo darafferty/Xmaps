@@ -12,8 +12,6 @@ The following routines are included:
                              a binmap
   transform_regions - transform CIAO region files defined using
                       one observation to another
-  ad2xy - transform ra, dec to x, y image coordinates
-  xy2ad - transform x, y image coordinates to ra, dec
 
 Version 0.6: 3/5/2011 - Updated for Ciao 4.3
 Version 0.7: 1/11/2013 - Updated for Ciao 4.5
@@ -25,11 +23,21 @@ import numpy
 import multiprocessing
 import threading
 import sys
+import shutil
+
+import pycrates
+import pytransform
+import stk
+
 from misc_functions import stack_to_list
-if os.environ.get("CALDB") == None:
+
+if os.environ.get("CALDB") is None:
     sys.exit('Please initalize CIAO before running.')
 
-def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, root=None, bg_file=None, bg_region=None, binning=None, ncores=None, quiet=True, clobber=False):
+
+def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file,
+             bpix_file, root=None, bg_file=None, bg_region=None,
+             binning=None, ncores=None, quiet=True, clobber=False):
     """
     Extracts spectra and makes appropriate weighted rmf and arf files.
 
@@ -51,13 +59,13 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
 
     """
     # Check that CIAO is initialized
-    if os.environ.get("CALDB") == None:
+    if os.environ.get("CALDB") is None:
         sys.exit('Please initalize CIAO before running.')
 
     nreg = len(region_list)
-    if isinstance(region_list, str): # if not a list, make into list
+    if isinstance(region_list, str):  # if not a list, make into list
         region_list = [region_list]
-    if isinstance(asol_list, str): # if not a list, make into list
+    if isinstance(asol_list, str):  # if not a list, make into list
         asol_list = [asol_list]
 
     # Run asphist to make an aspect histogram for the input evt2 file
@@ -68,11 +76,11 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
         asol_file = 'asol_stack.lst'
         asol_fileobj = open('asol_stack.lst', 'w')
         for asol in asol_list:
-            asol_fileobj.write(asol+'\n')
+            asol_fileobj.write(asol + '\n')
         asol_fileobj.close()
     else:
         asol_file = asol_list[0]
-    if root == None:
+    if root is None:
         reg_root = os.path.splitext(region_list[0])[0]
         indx_reg = reg_root.find('_reg1')
         if indx_reg > 0:
@@ -82,7 +90,7 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
     else:
         asphist_file = root + '_asphist.fits'
     # Check if clobber is set
-    if clobber == True:
+    if clobber:
         clobbertext = 'clobber=yes'
     else:
         clobbertext = ''
@@ -94,13 +102,13 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
     # the number of threads to use.
     # First, if quiet = False, use only one core for clarity;
     # otherwise, the output from multiple processes get mixed up.
-    if quiet == False:
+    if not quiet:
         ncores = 1
-    if ncores == None or ncores > multiprocessing.cpu_count():
+    if ncores is None or ncores > multiprocessing.cpu_count():
         ncores = multiprocessing.cpu_count()
     startindx = 0
     endindx = 0
-    indxdel = int(nreg/ncores)
+    indxdel = int(nreg / ncores)
     if indxdel < 1:
         indxdel = 1
         nthreads = nreg
@@ -113,7 +121,8 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
     for i in range(nthreads):
         startindx = endindx
         endindx = startindx + indxdel
-        if i == nthreads-1: endindx = nreg
+        if i == nthreads - 1:
+            endindx = nreg
         region_sublist = region_list[startindx:endindx]
         threads.append(threading.Thread(target=wextract_worker, args=(region_sublist, evt2_file, pbk_file, asphist_file, msk_file, bpix_file), kwargs={"root":root, "bg_file":bg_file, "bg_region":bg_region, "binning":binning, "clobber":clobber, "quiet":quiet, "pfiles_number":i}))
 
@@ -126,10 +135,10 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
         thr.join()
 
     # Check whether all spectra and responses were extracted successfully
-    print('\nExtraction complete for '+evt2_file+':')
+    print('\nExtraction complete for ' + evt2_file + ':')
     made_all = True
-    for i,region in enumerate(region_list):
-        if root == None:
+    for i, region in enumerate(region_list):
+        if root is None:
             pi_file = os.path.splitext(region)[0] + '_sou.pi'
         else:
             if nreg == 1:
@@ -138,13 +147,17 @@ def wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, bpix_file, r
                 pi_file = root + '_' + str(i) + '_sou.pi'
         if not os.path.isfile(pi_file):
             made_all = False
-            print('  No spectra or responses made for region '+region+'.')
-    if made_all == True:
+            print('  No spectra or responses made for region ' +
+                  region + '.')
+    if made_all:
         print('  All spectra and responses made successfully.')
     print(' ')
 
 
-def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bpix_file, root=None, bg_file=None, bg_region=None, binning=None, clobber=False, quiet=False, pfiles_number=None):
+def wextract_worker(region_list, evt2_file, pbk_file, asphist_file,
+                    msk_file, bpix_file, root=None, bg_file=None,
+                    bg_region=None, binning=None, clobber=False,
+                    quiet=False, pfiles_number=None):
     """
     Worker script for wextract that allows multithreading.
 
@@ -166,17 +179,17 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
 
     """
     nreg = len(region_list)
-    binarfwmap = 1 # set this to 2 or more if there are memory problems
+    binarfwmap = 1  # set this to 2 or more if there are memory problems
 
     # Check if clobber is set
-    if clobber == True:
+    if clobber:
         clobbertext = 'clobber=yes'
     else:
         clobbertext = ''
 
     # Check if binning is set
-    if binning != None:
-        binningtext1 = 'binspec='+str(binning)
+    if binning is not None:
+        binningtext1 = 'binspec=' + str(binning)
         binningtext2 = 'grouptype=NUM_CTS'
     else:
         binningtext1 = 'binspec=NONE'
@@ -187,20 +200,20 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
     # environment variable to a temporary directory (although it seems to
     # work fine even without it since pset is not currently used in this script).
     env = os.environ.copy()
-    if pfiles_number != None:
-        pfile_dir = './cxcds_param'+str(pfiles_number)
+    if pfiles_number is not None:
+        pfile_dir = './cxcds_param' + str(pfiles_number)
         if not os.path.exists(pfile_dir):
             os.mkdir(pfile_dir)
         # Set PFILES to a temporary directory in the current directory (note use of ; and :)
         env["PFILES"] = pfile_dir+';'+env["ASCDS_CONTRIB"]+'/param'+':'+env["ASCDS_INSTALL"]+'/param'
 
     # Now loop over regions and do extraction
-    for i,region in enumerate(region_list):
+    for i, region in enumerate(region_list):
         if os.path.isfile(region):
             print('Extracting spectra/responses from region ' + region + '...')
 
             # Define output file names (follow acisspec conventions)
-            if root == None:
+            if root is None:
                 pi_root = os.path.splitext(region)[0] + '_sou'
                 pi_file = pi_root + '.pi'
                 bg_pi_file = os.path.splitext(region)[0] + '_bgd.pi'
@@ -218,8 +231,9 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
             evt2_filter = evt2_file + '[sky=region(' + region + ')]'
             cmd = ['punlearn', 'specextract']
             p = subprocess.call(cmd, env=env)
-            if bg_file == None and bg_region != None:
-                bgtext = 'bkgfile=' + evt2_file + '[sky=region(' + bg_region + ')]'
+            if bg_file is None and bg_region is not None:
+                bgtext = 'bkgfile=' + evt2_file + \
+                         '[sky=region(' + bg_region + ')]'
             else:
                 bgtext = 'bkgfile=NONE'
 
@@ -231,7 +245,7 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
                 p = subprocess.call(cmd, env=env)
 
             # Extract background spectrum if a bg_file is given and a source spectrum was made
-            if bg_file != None and os.path.isfile(pi_file):
+            if bg_file is not None and os.path.isfile(pi_file):
                 cmd = ['punlearn', 'dmextract']
                 p = subprocess.call(cmd, env=env)
                 bg_filter = bg_file + '[sky=region(' + region + ')][bin PI]'
@@ -250,7 +264,7 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
                     p = subprocess.call(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 else:
                     p = subprocess.call(cmd, env=env)
-                if binning != None:
+                if binning is not None:
                     cmd = ['dmhedit', 'infile='+pi_root+'_grp.pi', 'filelist=', 'operation=add', 'key=BACKFILE', 'value='+bg_pi_file]
                     if quiet:
                         p = subprocess.call(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -261,7 +275,107 @@ def wextract_worker(region_list, evt2_file, pbk_file, asphist_file, msk_file, bp
             print('Region file ' + region + ' not found! No extraction done for this region.')
 
 
-def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=None, miny=None, bin=None, skip_dmimglasso=False, clobber=False):
+def find_sky_transform(cr):
+    """Return the SKY transform for the input image crate.
+
+    Parameters
+    ----------
+    cr
+        A IMAGECrate, e.g. as returned by pycrates.read_file().
+        It could also support tables, but that is trickier to do,
+        so currently restricted to an image.
+
+    Returns
+    -------
+    tr : None or a LINEAR2DTransform
+        Returns None if no transform can be found, otherwise
+        it returns a 2D transform.
+
+    Notes
+    -----
+    The mapping from FITS logical coordinates - what DS9 calls
+    "Image" coordinates - to the Chandra SKY system - which DS9
+    calls "Physical" coordinates - can be stored as two 1D
+    transforms (since Chandra data has no rotation) or a 2D
+    transform. This routine tries to "hide" this difference
+    and just return a 2D transform, whatever is in the input file.
+
+    If the files all matched Chandra data products, then it would
+    be relatively easy, but without knowing the axis names it is
+    rather messy. An alternative would be to manually add keywords
+    to the image files to make them look more like Chandra images,
+    and avoid the complexity here. This would include keyword/values
+    like
+
+        MTYPE1 = 'SKY'
+        MFORM1 = 'X,Y'
+        MTYPE2 = 'EQPOS'
+        MFORM2 = 'RA,DEC'
+
+    as well as the CRVAL1/2P, CRPIX1/2P, and CDELT1/2P keywords
+    (for the SKY coordinate transform) and CRVAL1/2, CRPIX1/2, and
+    CDELT1/2 for the celestial coordinates.
+
+    I expect this routine to fail horribly once it is used on
+    actual data.
+
+    """
+
+    assert isinstance(cr, pycrates.IMAGECrate)
+
+    axes = cr.get_axisnames()
+    if axes == []:
+        # Assume that if there's no axis names then there's no
+        # transform data.
+        return None
+
+    # The simple case is if there's a "vector" column (e.g. SKY)
+    # with a 2D transform.
+    #
+    try:
+        tr = cr.get_transform(axes[0])
+    except KeyError:
+        # For now return None, but could try something like
+        # iterating through the other axis names, if there
+        # are any.
+        return None
+
+    if isinstance(tr, pytransform.LINEAR2DTransform):
+        return tr
+
+    elif not isinstance(tr, pytransform.LINEARTransform):
+        # For now return None, but could try something like
+        # iterating through the other axis names, if there
+        # are any.
+        return None
+
+    # Assume that the second component is the second
+    # axis.
+    xtr = tr
+    try:
+        ytr = cr.get_transform(axes[1])
+    except KeyError:
+        return None
+
+    # Create a 2D transform based on the two 1D transforms.
+    #
+    trs = [xtr, ytr]
+    scales = [itr.get_parameter('SCALE').get_value()
+              for itr in trs]
+    offsets = [itr.get_parameter('OFFSET').get_value()
+               for itr in trs]
+    out = pytransform.LINEAR2DTransform()
+    out.get_parameter('ROTATION').set_value(0)
+    out.get_parameter('SCALE').set_value(scales)
+    out.get_parameter('OFFSET').set_value(offsets)
+    return out
+
+
+def make_regions_from_binmap(binmap_file, output_dir,
+                             reg_format='fits',
+                             minx=None, miny=None, bin=None,
+                             skip_dmimglasso=False,
+                             clobber=False):
     """
     Make CIAO region files from an input binmap.
 
@@ -285,68 +399,133 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
     Uses "dmimglasso" from CIAO to build the polygonal regions.
 
     """
-    import astropy.io.fits as pyfits
 
-    # Check if we need to find minx, miny, and binning of the binmap
-    if minx == None or miny == None or bin == None:
-        # Get pixel scale parameters out of the binmap header as needed
-        hdr_binmap = pyfits.getheader(binmap_file)
-        if minx == None:
-            if 'CRVAL1P' in hdr_binmap:
-                minx = hdr_binmap['CRVAL1P']
-            else:
-                sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
-        if miny == None:
-            if 'CRVAL2P' in hdr_binmap:
-                miny = hdr_binmap['CRVAL2P']
-            else:
-                sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
-        if bin == None:
-            if 'CDELT1P' in hdr_binmap:
-                binx = int(hdr_binmap['CDELT1P'])
-            else:
-                sys.exit('ERROR: The binmap header does not have pixel coordinate information. Please specify the minx, miny, and binning for the binmap.')
-            if 'CDELT2P' in hdr_binmap:
-                biny = int(hdr_binmap['CDELT2P'])
-            else:
-                biny = binx
-    if bin != None:
-        binx = bin
-        biny = bin
+    cr = pycrates.read_file(binmap_file)
+    file_sky_transform = find_sky_transform(cr)
+
+    # Create the mapping from logical (image or pixel) coordinates
+    # to the SKY system. If none of minx, miny, or bin are given
+    # then the transform from the file is used, otherwise a new
+    # transform is created using the user-supplied information.
+    #
+    # This is not quite the same as the original version. In part,
+    # the original code was a little-more general, in that it
+    # could read in "partial" data on the SKY coordinate
+    # transformation - e.g. if the file only had CDELT1P and CDELT2P
+    # keywords then the original version would pick this up. Using
+    # the crates approach is more of an all-or-nothing: you either
+    # have all the keywords or none of them.
+    #
+    if minx is None and miny is None and bin is None:
+        sky_transform = file_sky_transform
+
+    else:
+        if file_sky_transform is None:
+            sys.exit('ERROR: The binmap header does not have ' +
+                     'pixel coordinate information. Please specify ' +
+                     'the minx, miny, and binning for the binmap.')
+
+        scales = file_sky_transform.get_parameter('SCALE').get_value()
+        offsets = file_sky_transform.get_parameter('OFFSET').get_value()
+
+        # There is a slight difference here in how the OFFSET values
+        # are processed (these correspond to the CRVAL1/2P values).
+        # The transform offsets are defined for the logical coordinate
+        # (0, 0), whereas the file values are defined for whatever
+        # the CRPIX1/2P values are. Normally these are (0.5,0.5),
+        # and I believe the original code rounded the CRVALXP values
+        # down, which effectively matches things up.
+        #
+        if minx is not None:
+            offsets[0] = minx * 1.0
+        if miny is not None:
+            offsets[1] = miny * 1.0
+
+        if bin is not None:
+            scales = [bin * 1.0, bin * 1.0]
+
+        sky_transform = pytransform.LINEAR2DTransform()
+        sky_transform.get_parameter('ROTATION').set_value(0)
+        sky_transform.get_parameter('SCALE').set_value(scales)
+        sky_transform.get_parameter('OFFSET').set_value(offsets)
+
+    # This logic could be moved into the if statement above to
+    # avoid unneeded work, but it's clearer here.
+    scales = sky_transform.get_parameter('SCALE').get_value()
+    offsets = sky_transform.get_parameter('SCALE').get_value()
+    binx, biny = scales
+    minx, miny = offsets
+    file_sky_transform = None
+
     if not os.path.exists(output_dir):
         p = subprocess.call(['mkdir', output_dir])
-    if clobber:
-        p = subprocess.call(['rm', '-f', output_dir+'/bin_*.reg'])
 
-    # Check if min bin is negative or starts or ends on the image boundary.
-    # If so, assume it is not wanted (e.g., for wvt bin maps).
-    binmap = pyfits.open(binmap_file, mode="readonly")
-    binimage = binmap[0].data
+    if clobber:
+        p = subprocess.call(['rm', '-f', output_dir + '/bin_*.reg'])
+
+    # Check if min bin is negative or starts or ends on the image
+    # boundary. If so, assume it is not wanted (e.g., for wvt bin
+    # maps).
+    binimage = cr.get_image().values
     minbin = int(binimage.min())
     maxbin = int(binimage.max())
     if minbin < 0:
         minbin = 0
+
     inbin = numpy.where(binimage == minbin)
-    if 0 in inbin[0] or numpy.size(binimage,0)-1 in inbin[0]:
+    if 0 in inbin[0] or numpy.size(binimage, 0) - 1 in inbin[0]:
         minbin += 1
-    print('  Using minbin='+str(minbin)+', maxbin='+str(maxbin)+', minx='+str(minx)+', miny='+str(miny)+', binx='+str(binx)+', biny='+str(biny))
+
+    print('  Using minbin=' + str(minbin) +
+          ', maxbin=' + str(maxbin) +
+          ', minx=' + str(minx) +
+          ', miny=' + str(miny) +
+          ', binx=' + str(binx) +
+          ', biny=' + str(biny))
 
     # For each bin, construct region using CIAO's "dmimglasso"
+    #
+    # The coordinates returned by numpy.where are 0 based, but
+    # the FITS logical/image coordinate system is 1 based, so
+    # a conversion is needed when passing to sky_transform.
+    #
     if not skip_dmimglasso:
         region_comment = '# Region file format: CIAO version 1.0\n'
         if clobber:
             clb_txt = 'yes'
         else:
             clb_txt = 'no'
-        for i in range(minbin, maxbin+1):
-            out_region_fits_file = output_dir+'/reg'+str(i)+'.fits'
-            inbin = numpy.where(binimage == i)
-            if len(inbin[0]) == 0:
+
+        for i in range(minbin, maxbin + 1):
+            out_region_fits_file = output_dir + '/reg' + \
+                str(i) + '.fits'
+            inybin, inxbin = numpy.where(binimage == i)
+            if len(inybin) == 0:
                 continue
-            for j in range(len(inbin[0])):
-                xpos = min(minx + binx * (inbin[1][j] + 1), minx + binx * binimage.shape[1])
-                ypos = min(miny + biny * (inbin[0][j] + 1), miny + biny * binimage.shape[0])
-                cmd = ['dmimglasso', binmap_file, out_region_fits_file, str(xpos), str(ypos), '0.1', '0.1', 'value=delta',     'maxdepth=1000000', 'clobber='+clb_txt]
+
+            # Convert the j,i values from where into the FITS
+            # logical coordinate system lx,ly and then convert
+            # to SKY values. It is important that lcoords is
+            # a floating-point value, and not an integer one,
+            # to ensure that no truncation of the result happens.
+            #
+            # An alternative would be to set coord=logical
+            # when running dmimglasso, so that
+            # inxbin+1, inybin+1 could be used (i.e. no need
+            # for the coordinate conversion.
+            #
+            lcoords = numpy.vstack((inxbin + 1.0, inybin + 1.0)).T
+            scoords = sky_transform.apply(lcoords)
+
+            for xpos, ypos in scoords:
+                # Is this restriction needed?
+                xpos = min(xpos, minx + binx * binimage.shape[1])
+                ypos = min(ypos, miny + biny * binimage.shape[0])
+                cmd = ['dmimglasso', binmap_file,
+                       out_region_fits_file,
+                       str(xpos), str(ypos), '0.1', '0.1',
+                       'value=delta', 'maxdepth=1000000',
+                       'clobber=' + clb_txt]
                 p = subprocess.call(cmd)
                 if p == 0:
                     break
@@ -365,15 +544,15 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
                 print(cmd2)
                 print(q)
 
-
             if reg_format == 'ascii':
                 if os.path.isfile(out_region_fits_file):
-                    reg = pyfits.open(out_region_fits_file)
-                    reg_params=reg[1].data.tolist()
-                    xvertices = reg_params[0][0] # array of x coordinates of vertices
-                    yvertices = reg_params[0][1] # array of y coordinates of vertices
+                    reg = pycrates.read_file(out_region_fits_file)
+                    vertices = reg.get_column(0).values
+                    xvertices = vertices[0, 0]
+                    yvertices = vertices[0, 1]
 
-                    out_region_file = open(output_dir+'/reg'+str(i)+'.reg', "w")
+                    out_region_file = open(output_dir + '/reg' +
+                                           str(i) + '.reg', "w")
                     out_region_file.write(region_comment)
 
                     for j in range(len(xvertices)):
@@ -389,291 +568,224 @@ def make_regions_from_binmap(binmap_file, output_dir, reg_format='fits', minx=No
 
     # Build region list
     bin_region_list = []
-    for i in range(minbin, maxbin+1):
+    for i in range(minbin, maxbin + 1):
         if reg_format == 'ascii':
             # Check that each region file exists before adding it to the list
-            if os.path.isfile(output_dir+'/reg'+str(i)+'.reg'):
-                bin_region_list.append('reg'+str(i)+'.reg')
+            rname = 'reg' + str(i) + '.reg'
+            if os.path.isfile(output_dir + '/' + rname):
+                bin_region_list.append(rname)
         else:
             # Check that each region file exists before adding it to the list
             filename = "reg%d.fits" % i
             path = os.path.join(output_dir, filename)
-            if os.path.isfile(path) and pyfits.open(path)[1].data is not None:
+            # It is not 100% clear what the equivalent to checking
+            # `pyfits.open(path)[1].data is not None`. I am going
+            # to use a check for a non-zero number of rows, forcing
+            # the second block (CXC Data model starts counting at
+            # a block number of 1, not 0).
+            if os.path.isfile(path) and \
+                    pycrates.read_file(path + "[2]").get_nrows() > 0:
                 bin_region_list.append(filename)
             else:
                 print("Warning: not using %s" % filename)
     return bin_region_list
 
 
-def transform_regions(region_list, hdr_in, hdr_out, preroot, reg_format = 'fits', clobber = False):
+def copy_regions(region_list, preroot, clobber=False):
+    """Copy regions to new names.
+
+    This is for when the input and output coordinate coordinate
+    systems are the same.
+    """
+
+    new_region_list = []
+    for region_file in region_list:
+        newname = preroot + region_file
+        if clobber or not os.path.isfile(newname):
+            if os.path.isfile(newname):
+                subprocess.check_call(['rm', '-f', newname])
+
+            shutil.copy(region_file, newname)
+            new_region_list.append(newname)
+
+    return new_region_list
+
+
+def transform_region_ascii(infile, outfile, wcs_in, wcs_out):
+    """Transform coordinates in ASCII input file.
+
+    This routine is called assuming the output file is to
+    be clobbered if it already exists.
+    """
+
+    with open(infile, 'r') as fh:
+        regions = fh.readlines()
+
+    with open(outfile, 'w') as ofh:
+        for region in regions:
+            if region.startswith('#'):
+                ofh.write(region + '\n')
+                continue
+
+            region = region.rstrip()
+            post0 = 0
+            post1 = region.find("(")
+            reg_type = region[post0:post1]
+
+            if reg_type in ['polygon', 'Polygon']:
+                # convert from a 1D array into a 2D one
+                coords_in = [float(f)
+                             for f in region[post1 + 1:-1].split(',')]
+
+                assert coords_in.size % 2 == 0
+                # Use integer division here
+                coords_in.resize(2, coords_in.size // 2)
+
+                # The conversion can be applied to all the
+                # pairs at once, but it requires the data be
+                # in the "right" shape.
+                #
+                coords_cel = wcs_in.apply(coords_in.T)
+                coords_out = wcs_out.invert(coords_cel)
+
+                # The coords_out array is not transposed (to
+                # match the input) since it makes it easier
+                # to convert back to a string.
+                coords_str = ",".join(["{:7.2f}".format(c)
+                                       for c in coords_out])
+
+                out = reg_type + '(' + coords_str + ')'
+
+            elif reg_type == 'rotbox':
+
+                # Just need to convert the center of the box, since
+                # the assumption is that the pixel scale is the
+                # same in both the input and output systems.
+                #
+                toks = region[post1 + 1:].split(",")
+                assert len(toks) > 2
+
+                xphys_in = float(toks[0])
+                yphys_in = float(toks[1])
+
+                # The handling of nD arrays by the apply and invert
+                # methods of transform objects is, at best, strange
+                # to describe.
+                #
+                coords_cel = wcs_in.apply([[xphys_in, yphys_in]])
+                coords_out = wcs_out.invert(coords_cel)
+
+                xphys_out = coords_out[0][0]
+                yphys_out = coords_out[0][1]
+                coords_str = '{:7.2f},{:7.2f},'.format(xphys_out,
+                                                       yphys_out)
+
+                # Hopefully this re-creates the remainded of the
+                # string (i.e. after the center of the box).
+                #
+                out = reg_type + '(' + coords_str + ",".join(toks[2:])
+
+            else:
+                # copy over the line
+                out = region
+
+            ofh.write(out + '\n')
+
+
+def transform_region_fits(infile, outfile, wcs_in, wcs_out):
+    """Transform coordinates in FITS input file.
+
+    This routine is called assuming the output file is to
+    be clobbered if it already exists.
+    """
+
+    # Read in the whole file in case there are any other interesting
+    # blocks in the file that should be retained.
+    #
+    ds = pycrates.CrateDataset(infile, mode='r')
+    cr = ds.get_crate(2)
+    assert isinstance(cr, pycrates.TABLECrate)
+
+    # NOTE: the EQPOS column could be read directly, which would
+    # avoid the need to convert the input file from physical to
+    # celestial coordinates.
+    #
+    shapes = cr.get_column('SHAPE').values
+    pos = cr.get_column('POS').values
+
+    # Since the shapes are being processed on a row-by-row bases,
+    # do not try and convert all the coordinates in one go (which
+    # is supported by the apply and invert methods).
+    #
+    for i in xrange(0, cr.get_nrows()):
+
+        shape = shapes[i].upper()
+        if shape == 'POLYGON':
+
+            coords_cel = wcs_in.apply(pos[i].T)
+            coords_out = wcs_out.invert(coords_cel).T
+
+            # Overwrite this row
+            pos[i] = coords_out
+
+        elif shape == 'ROTBOX':
+            # It should be possible to encode ROTBOX in CXC FITS
+            # region files.
+            #
+            sys.exit('ERROR: Sorry, only polygons are currently supported for FITS regions.')
+
+    cr.get_column('POS').values = pos
+    ds.write(outfile, clobber=True)
+
+
+def transform_regions(region_list, wcs_in, wcs_out, preroot,
+                      reg_format='fits', clobber=False):
     """
     Transforms CIAO region files for use with a different observation.
 
     Inputs:  region_list - list of region file(s) in CIAO format
-             hdr_in - pyfits header of for input regions
-             hdr_out - pyfits header of output regions
+             wcs_in - EQPOS transform for input coordinate system
+                      (physical to celestial)
+             wcs_out - EQPOS transform for output coordinate system
+                       (physical to celestial)
              preroot - prepend string for output region files
-             reg_format - format of input/ouput region files ('fits' or 'ascii');
-                          default = 'fits'
+             reg_format - format of input/ouput region files
+                          ('fits' or 'ascii'); default = 'fits'
              clobber - if True, overwrite any existing files
 
     Ouputs:  New region files, prepended with the preroot.
 
     Returns: A list of the adjusted regions.
 
+    It is assumed that sky_in and sky_out are different; if they
+    are the same use copy_regions().
+
     """
-    # Check if input and output headers are the same. If so,
-    # just copy region files to new names.
-    if hdr_in == hdr_out:
-        new_region_list = []
-        for region_file in region_list:
-            if os.path.isfile(preroot + region_file) == False or clobber == True:
-                if os.path.isfile(preroot + region_file):
-                    p = subprocess.call(['rm', '-f', preroot + region_file])
-                p = subprocess.call(['cp', region_file, preroot + region_file])
-                new_region_list.append(preroot + region_file)
-        return new_region_list
 
-    # Get pixel scale parameters out of the input header
-    # if it is the header of an image
-    if 'CRVAL1P' in hdr_in:
-        CRVAL1P_in = hdr_in['CRVAL1P']
-        CRPIX1P_in = hdr_in['CRPIX1P']
-        CDELT1P_in = hdr_in['CDELT1P']
-        CRVAL2P_in = hdr_in['CRVAL2P']
-        CRPIX2P_in = hdr_in['CRPIX2P']
-        CDELT2P_in = hdr_in['CDELT2P']
-        CRVAL1P_out = hdr_out['CRVAL1P']
-        CRPIX1P_out = hdr_out['CRPIX1P']
-        CDELT1P_out = hdr_out['CDELT1P']
-        CRVAL2P_out = hdr_out['CRVAL2P']
-        CRPIX2P_out = hdr_out['CRPIX2P']
-        CDELT2P_out = hdr_out['CDELT2P']
+    if reg_format == 'ascii':
+        func = transform_region_ascii
+    elif reg_format == 'fits':
+        func = transform_region_fits
+    else:
+        raise ValueError("Unsupported reg_format=" + reg_format)
 
+    outfiles = []
     for region_file in region_list:
-        # Read in regions
-        if reg_format == 'ascii':
-            cur_region_file = open(region_file, "r")
-            region = cur_region_file.readlines()
-            if region[0][0] == '#': # remove first line if it's a comment
-                has_comment = True
-                region_comment = region[0]
-                region = region[1:]
-            else:
-                has_comment = False
-            cur_region_file.close()
-            nreg = len(region)
-            for i in range(nreg): region[i] = region[i].rstrip() # trim newlines
-        else:
-            import astropy.io.fits as pyfits
-            reg_orig = pyfits.open(region_file)
-            region = [reg_orig[1].data] # region parameters are stored in second exten
 
-        for r, reg in enumerate(region):
-            # Find region type
-            if reg_format == 'ascii':
-                post0 = 0
-                post1 = reg.find("(")
-                reg_type = reg[post0:post1]
-            else:
-                reg_type = reg.SHAPE[0]
+        # Do not do anything if the output file already exists and
+        # clobber is not set.
+        #
+        outfile = preroot + region_file
+        outfiles.append(outfile)
+        if not clobber and os.path.exists(outfile):
+            continue
 
-            if reg_type == 'polygon' or reg_type == 'Polygon':
-                # Find coordinates of the vertices
-                if reg_format == 'ascii':
-                    coords = reg[post1+1:-1].split(',')
-                    num_ver = len(coords)/2
-                else:
-                    num_ver = numpy.size(reg.X,1)
+        func(region_file, outfile, wcs_in, wcs_out)
 
-                for i in range(num_ver):
-                    if reg_format == 'ascii':
-                        xphys_in = float(coords[i*2])
-                        yphys_in = float(coords[i*2+1])
-                    else:
-                        xphys_in = reg.X[0][i]
-                        yphys_in = reg.Y[0][i]
-
-                    # Change physical coordinates to image coordinates if needed
-                    if 'CRVAL1P' in hdr_in:
-                        xim_in = (xphys_in - CRVAL1P_in - CRPIX1P_in) / CDELT1P_in
-                        yim_in = (yphys_in - CRVAL2P_in - CRPIX2P_in) / CDELT2P_in
-                    else:
-                        xim_in = xphys_in
-                        yim_in = yphys_in
-
-                    # Change image coordinates to ra, dec
-                    a, d = xy2ad(xim_in, yim_in, hdr_in)
-
-                    # Change ra, dec to output image coordinates
-                    xim_out, yim_out = ad2xy(a, d, hdr_out)
-
-                    # Change output image coordinates to physical coordinates if needed
-                    if 'CRVAL1P' in hdr_in:
-                        xphys_out=xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
-                        yphys_out=yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
-                    else:
-                        xphys_out = xim_out
-                        yphys_out = yim_out
-
-                    # Replace physical coordinates in region with new ones
-                    if reg_format == 'ascii':
-                        if i==0:
-                            new_coords_str = '%7.2f,%7.2f' % (xphys_out, yphys_out)
-                        else:
-                            new_coords_str = new_coords_str + ',%7.2f,%7.2f' % (xphys_out, yphys_out)
-                        region[r] = reg[:post1+1] + new_coords_str + ')\n'
-                    else:
-                        reg.X[0][i] = xphys_out
-                        reg.Y[0][i] = yphys_out
-
-            if reg_type == 'rotbox':
-                if reg_format == 'fits':
-                    sys.exit('ERROR: Sorry, only polygons are currently supported for FITS regions.')
-
-                # Find center(s) in physical coordinates
-                posx0 = reg.find("(") + 1
-                posx1 = reg.find(",")
-                xphys_in = float(reg[posx0:posx1])
-                posy0 = posx1 + 1
-                posy1 = posy0 + reg[posy0:].find(",")
-                yphys_in = float(reg[posy0:posy1])
-
-                # Change physical coordinates to image coordinates if needed
-                if 'CRVAL1P' in hdr_in:
-                    xim_in = (xphys_in - CRVAL1P_in - CRPIX1P_in) / CDELT1P_in
-                    yim_in = (yphys_in - CRVAL2P_in - CRPIX2P_in) / CDELT2P_in
-                else:
-                    xim_in = xphys_in
-                    yim_in = yphys_in
-
-                # Change image coordinates to ra, dec
-                a, d = xy2ad(xim_in, yim_in, hdr_in)
-
-                # Change ra, dec to output image coordinates
-                xim_out, yim_out = ad2xy(a, d, hdr_out)
-
-                # Change output image coordinates to physical coordinates if needed
-                if 'CRVAL1P' in hdr_in:
-                    xphys_out=xim_out*CDELT1P_out+CRVAL1P_out+CRPIX1P_out
-                    yphys_out=yim_out*CDELT2P_out+CRVAL2P_out+CRPIX2P_out
-                else:
-                    xphys_out = xim_out
-                    yphys_out = yim_out
-
-                # Replace physical coordinates in region with new ones
-                new_coords_str = '%7.2f,%7.2f' % (xphys_out, yphys_out)
-                region[r] = reg[:posx0] + new_coords_str + reg[posy1:] + '\n'
-
-        # Write new region file
-        if reg_format == 'ascii':
-            if os.path.isfile(preroot + region_file) == False or clobber == True:
-                out_region_file = open(preroot + region_file, "w")
-                if has_comment:
-                    out_region_file.write(region_comment)
-                out_region_file.writelines(region)
-                out_region_file.close()
-        else:
-            if os.path.isfile(preroot + region_file) == False or clobber == True:
-                reg_orig.writeto(preroot + region_file, clobber=True)
-
-    new_region_list = []
-    for i in range(len(region_list)):
-        new_region_list.append(preroot + region_list[i])
-    return new_region_list
+    return outfiles
 
 
-def ad2xy(a, d, hdr):
-    """
-    Transforms ra, dec to image coordinates.
-
-    Inputs:  a - ra in degrees
-             d - dec in degrees
-             hdr - pyfits header containing WCS info
-
-    Returns: x, y image coordinates corresponding to a, d
-
-    """
-    if 'CRVAL1P' in hdr: # -> header of an image
-        CRVAL1 = hdr['CRVAL1P']
-        CRPIX1 = hdr['CRPIX1P']
-        CDELT1 = hdr['CDELT1P']
-        CRVAL2 = hdr['CRVAL2P']
-        CRPIX2 = hdr['CRPIX2P']
-        CDELT2 = hdr['CDELT2P']
-    else: # -> header of an events file
-        CRVAL1 = hdr['TCRVL11']
-        CRPIX1 = hdr['TCRPX11']
-        CDELT1 = hdr['TCDLT11']
-        CRVAL2 = hdr['TCRVL12']
-        CRPIX2 = hdr['TCRPX12']
-        CDELT2 = hdr['TCDLT12']
-
-    cd_mat = numpy.matrix([[1.0, 0.0], [0.0, 1.0]]) # assume no rotation for Chandra images
-    cd_mat[0,0] = cd_mat[0,0] * CDELT1
-    cd_mat[0,1] = cd_mat[0,1] * CDELT1
-    cd_mat[1,1] = cd_mat[1,1] * CDELT2
-    cd_mat[1,0] = cd_mat[1,0] * CDELT2
-
-    radeg = 180.0 / numpy.pi
-    h = numpy.sin(d / radeg) * numpy.sin(CRVAL2 / radeg) + numpy.cos(d / radeg) * numpy.cos(CRVAL2 / radeg) * numpy.cos(a / radeg - CRVAL1 / radeg)
-    xsi = numpy.cos(d / radeg) * numpy.sin(a / radeg - CRVAL1 / radeg) / h * radeg
-    eta = (numpy.sin(d / radeg) * numpy.cos(CRVAL2 / radeg) - numpy.cos(d / radeg) * numpy.sin(CRVAL2 / radeg) * numpy.cos(a / radeg - CRVAL1 / radeg)) / h * radeg
-    cdinv = cd_mat.I
-    xdif = cdinv[0,0] * xsi + cdinv[0,1] * eta
-    ydif = cdinv[1,0] * xsi + cdinv[1,1] * eta
-    x = xdif + CRPIX1 - 1
-    y = ydif + CRPIX2 - 1
-
-    return x, y
-
-
-def xy2ad(x, y, hdr):
-    """
-    Transforms image coordinates to ra, dec.
-
-    Inputs:  x - x image coordinate
-             y - y image coordinate
-             hdr - pyfits header containing WCS info
-
-    Returns: ra, dec corresponding to x, y
-
-    """
-    if 'CRVAL1P' in hdr: # -> header of an image
-        CRVAL1 = hdr['CRVAL1P']
-        CRPIX1 = hdr['CRPIX1P']
-        CDELT1 = hdr['CDELT1P']
-        CRVAL2 = hdr['CRVAL2P']
-        CRPIX2 = hdr['CRPIX2P']
-        CDELT2 = hdr['CDELT2P']
-    else: # -> header of an events file
-        CRVAL1 = hdr['TCRVL11']
-        CRPIX1 = hdr['TCRPX11']
-        CDELT1 = hdr['TCDLT11']
-        CRVAL2 = hdr['TCRVL12']
-        CRPIX2 = hdr['TCRPX12']
-        CDELT2 = hdr['TCDLT12']
-
-    cd_mat = numpy.matrix([[1.0, 0.0], [0.0, 1.0]]) # assume no rotation for Chandra images
-    cd_mat[0,0] = cd_mat[0,0] * CDELT1
-    cd_mat[0,1] = cd_mat[0,1] * CDELT1
-    cd_mat[1,1] = cd_mat[1,1] * CDELT2
-    cd_mat[1,0] = cd_mat[1,0] * CDELT2
-
-    xdif = x - (CRPIX1 - 1)
-    ydif = y - (CRPIX2 - 1)
-    xsi = cd_mat[0,0] * xdif + cd_mat[0,1] * ydif
-    eta = cd_mat[1,0] * xdif + cd_mat[1,1] * ydif
-    radeg = 180.0 / numpy.pi
-    beta = numpy.cos(CRVAL2 / radeg) - eta / radeg * numpy.sin(CRVAL2 / radeg)
-    a = (numpy.arctan2(xsi / radeg, beta) + CRVAL1 / radeg) * radeg
-    gamma = numpy.sqrt((xsi / radeg)**2 + beta**2)
-    d = numpy.arctan2(eta / radeg * numpy.cos(CRVAL2 / radeg) + numpy.sin(CRVAL2 / radeg), gamma) * radeg
-
-    return a, d
-
-
-if __name__=='__main__':
+if __name__ == '__main__':
 
     from optparse import OptionParser
     parser = OptionParser(usage='%prog [options] <region_file> <evt2_file> <pbk_file> <asol_file> <msk_file>\n\nArguments:\n  <region_file>  region file in CIAO format (may be list; if so, prepend filename with "@")\n  <evt2_file>    events file\n  <pbk_file>     pbk0 file\n  <asol_file>    asol1 file (may be list; if so, prepend filename with "@")\n  <msk_file>     msk1 file', version="%prog 0.5")
@@ -685,7 +797,10 @@ if __name__=='__main__':
     parser.add_option('-c', action='store_true', dest='clobber', help='clobber any existing files', default=False)
     (options, args) = parser.parse_args()
     if len(args) == 5:
-        region_file = args[0]
+        # stk.build reads in a stack - e.g. a single value, or a
+        # comma-separated list of names, or a filename with a leading
+        # '@' and returns a list of values.
+        region_list = stk.build(args[0])
         evt2_file = args[1]
         pbk_file = args[2]
         asol_file = args[3]
@@ -697,18 +812,13 @@ if __name__=='__main__':
         binning = options.bin_cnts
         ncores = options.ncores
 
-        # Read region file names from the region_file if region_file begins with '@'
-        if region_file[0] == '@':
-            region_list_file = open(region_file[1:], "r")
-            region_list = region_list_file.readlines()
-            region_list_file.close()
-            for i in range(len(region_list)): region_list[i] = region_list[i].rstrip() # trim newlines
-        else:
-            region_list = [region_file]
-
+        # TODO: stack_to_list could be simplified by using stk.build
+        #       but leave that for a later date.
         asol_list = stack_to_list(asol_file)
 
         # Do extraction using threads
-        wextract(region_list, evt2_file, pbk_file, asol_list, msk_file, root=root, bg_file=bg_file, bg_region=bg_region, binning=binning, ncores=ncores, clobber=clobber)
+        wextract(region_list, evt2_file, pbk_file, asol_list, msk_file,
+                 root=root, bg_file=bg_file, bg_region=bg_region,
+                 binning=binning, ncores=ncores, clobber=clobber)
     else:
         parser.print_help()
